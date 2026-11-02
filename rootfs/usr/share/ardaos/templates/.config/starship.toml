@@ -17,11 +17,11 @@ yellow = "{{yellow}}"
 [directory]
 style = "bold accent"
 truncation_length = 3
-format = "[ $path]($style)[$read_only]($read_only_style) "
+format = "[$path]($style)[$read_only]($read_only_style) "
 
 [git_branch]
 style = "accent2"
-symbol = " "
+symbol = "⎇ "
 format = "[$symbol$branch]($style) "
 
 [git_status]
@@ -29,11 +29,11 @@ style = "yellow"
 
 [nodejs]
 style = "green"
-format = "[ $version]($style) "
+format = "[⬢ $version]($style) "
 
 [java]
 style = "red"
-format = "[ $version]($style) "
+format = "[☕ $version]($style) "
 
 [cmd_duration]
 style = "muted"

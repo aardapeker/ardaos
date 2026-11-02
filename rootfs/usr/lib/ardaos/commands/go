@@ -5,18 +5,29 @@ source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
 
 APPS="$ARDAOS_SHARE/apps.list"   # key|Label|command|gui or tui
 
-launch() {
-  local cmd=$1 kind=$2
-  [[ $kind == tui ]] && cmd="kitty --class ardaos-app -e $cmd"
-  if in_sway; then swaymsg exec "$cmd" >/dev/null
-  else setsid -f sh -c "$cmd" >/dev/null 2>&1; fi
+# only apps that exist here (and no GUI apps without a graphical session)
+available() {
+  local key label cmd kind
+  while IFS='|' read -r key label cmd kind; do
+    has "${cmd%% *}" || continue
+    [[ $kind == gui && -z ${WAYLAND_DISPLAY:-} ]] && continue
+    echo "$key|$label|$cmd|$kind"
+  done < "$APPS"
 }
 
+launch() {
+  local cmd=$1 kind=$2
+  if ! in_sway; then exec $cmd; fi                       # Termux / plain console: run here
+  [[ $kind == tui ]] && cmd="kitty --class ardaos-app -e $cmd"
+  swaymsg exec "$cmd" >/dev/null
+}
+
+apps=$(available)
 if [[ -n ${1:-} ]]; then                       # arda go web
-  line=$(grep "^$1|" "$APPS") || { ui_fail "no app '$1'"; exit 1; }
+  line=$(grep "^$1|" <<< "$apps") || { ui_fail "no app '$1' here"; exit 1; }
 else                                           # menu
-  label=$(cut -d'|' -f2 "$APPS" | fzf --prompt "go ❯ " --height 100% --no-info) || exit 0
-  line=$(grep -F "|$label|" "$APPS")
+  label=$(cut -d'|' -f2 <<< "$apps" | fzf --prompt "go ❯ " --height 100% --no-info) || exit 0
+  line=$(grep -F "|$label|" <<< "$apps")
 fi
 
 IFS='|' read -r _ _ cmd kind <<< "$line"

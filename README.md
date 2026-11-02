@@ -65,10 +65,24 @@ zellij, atuin, gum, tealdeer, fastfetch.
 
 **Apps:** Firefox, VS Code, spotify_player, Podman (+ compose), Node.js, Java 21.
 
+## 📱 ArdaOS Pocket Edition (Android)
+
+Same look and commands on your phone, inside [Termux](https://termux.dev) (install it from F-Droid or GitHub, not the old Play Store version):
+
+```bash
+pkg install git
+git clone https://github.com/aardapeker/ardaos && cd ardaos
+./termux-install.sh
+```
+
+Then close and reopen Termux. `arda theme` live-previews right on the phone screen.
+No GUI apps here, just the terminal stack. Run it again any time to update.
+
 ## How it's organized
 
 ```
 build.sh                 builds the ISO (runs on your Fedora)
+termux-install.sh        Pocket Edition for Android (Termux)
 kickstart/ardaos.ks      package list + build steps
 rootfs/                  copied as-is into the image
   etc/ardaos/identity.conf   ← the name lives ONLY here (rename = edit + rebuild)

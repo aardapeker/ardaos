@@ -4,7 +4,12 @@ set -euo pipefail
 source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
 
 ui_title "updating ${DISTRO_NAME:-ArdaOS}"
-sudo -v
-ui_spin "system packages (dnf)" sudo dnf upgrade --refresh -y && ui_ok "system packages"
-ui_spin "terminal tools (GitHub)" sudo "$ARDAOS_LIB/tools.sh" && ui_ok "terminal tools"
+if is_termux; then
+  ui_spin "packages (pkg)" pkg upgrade -y && ui_ok "packages"
+  ui_spin "fonts (GitHub)" env ARDAOS_KINDS=font "$ARDAOS_LIB/tools.sh" && ui_ok "fonts"
+else
+  sudo -v
+  ui_spin "system packages (dnf)" sudo dnf upgrade --refresh -y && ui_ok "system packages"
+  ui_spin "terminal tools (GitHub)" sudo "$ARDAOS_LIB/tools.sh" && ui_ok "terminal tools"
+fi
 ui_info "tip: run '$ARDAOS_CMD doctor' to check everything still works"

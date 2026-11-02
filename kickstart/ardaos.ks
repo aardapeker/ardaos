@@ -65,8 +65,7 @@ kitty
 foot
 polkit
 
-# --- fonts (Maple Mono + Iosevka come from GitHub in setup) ---
-jetbrains-mono-fonts-all
+# --- fonts (JetBrains Mono, Maple Mono, Iosevka come from GitHub in setup) ---
 google-noto-emoji-fonts
 google-noto-sans-fonts
 

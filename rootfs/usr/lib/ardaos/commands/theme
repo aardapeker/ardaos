@@ -11,10 +11,12 @@ TEMPLATES="$ARDAOS_SHARE/templates"
 
 theme_file() { local f="$THEMES/$1.theme"; [[ -f $f ]] || { ui_fail "no theme '$1'"; exit 1; }; echo "$f"; }
 theme_ids()  { for f in "$THEMES"/*.theme; do basename "$f" .theme; done; }
+theme_name() { sed -n 's/^name *= *//p' "$(theme_file "$1")"; }
 
 # Turn a theme file (key=value) into a sed script: {{key}}, {{key_hex}}, {{key_rgb}}
 sed_script() {
   local key val
+  printf 's|{{ardaos_share}}|%s|g\n' "$ARDAOS_SHARE"
   while IFS='=' read -r key val; do
     key=${key//[[:space:]]/}; val=${val#"${val%%[![:space:]]*}"}; val=${val%"${val##*[![:space:]]}"}
     [[ -z $key || $key == \#* ]] && continue
@@ -27,38 +29,48 @@ sed_script() {
   done < "$1"
 }
 
-# Render every template into <dest> (normally $HOME), same relative path.
+# Which templates belong on this machine? (.termux/ only in Termux)
+templates() {
+  find "$TEMPLATES" -type f | while read -r t; do
+    rel=${t#"$TEMPLATES"/}
+    [[ $rel == .termux/* ]] && ! is_termux && continue
+    echo "$rel"
+  done
+}
+
+# render <theme-id> <dest-root> [only-this-template]
 render() {
-  local script dest=$2 tmpl rel
-  script=$(mktemp); sed_script "$1" > "$script"
-  while IFS= read -r -d '' tmpl; do
-    rel=${tmpl#"$TEMPLATES"/}
-    mkdir -p "$dest/$(dirname "$rel")"
-    sed -f "$script" "$tmpl" > "$dest/$rel"
-    grep -q '{{' "$dest/$rel" && ui_warn "unfilled placeholder in $rel"
-  done < <(find "$TEMPLATES" -type f -print0)
+  local script rel; script=$(mktemp)
+  sed_script "$(theme_file "$1")" > "$script"
+  for rel in ${3:-$(templates)}; do
+    mkdir -p "$2/$(dirname "$rel")"
+    sed -f "$script" "$TEMPLATES/$rel" > "$2/$rel"
+    if grep -q '{{' "$2/$rel"; then ui_warn "unfilled placeholder in $rel"; fi
+  done
   rm -f "$script"
 }
 
 reload_apps() {
-  pkill -USR1 -x kitty 2>/dev/null || true          # kitty re-reads its config
-  in_sway && swaymsg reload >/dev/null 2>&1 || true   # wallpaper + borders
+  pkill -USR1 -x kitty 2>/dev/null || true                     # kitty re-reads its config
+  if in_sway; then swaymsg reload >/dev/null 2>&1 || true; fi   # wallpaper + borders
+  if has termux-reload-settings; then termux-reload-settings; fi
 }
 
-kitty_live() {  # recolor the running kitty without touching any file
-  [[ -n ${KITTY_LISTEN_ON:-} ]] && has kitty || return 0
-  local script conf
-  script=$(mktemp); conf=$(mktemp --suffix=.conf)
-  sed_script "$(theme_file "$1")" > "$script"
-  sed -f "$script" "$TEMPLATES/.config/kitty/theme.conf" > "$conf"
-  kitty @ set-colors --all "$conf" >/dev/null 2>&1 || true
-  rm -f "$script" "$conf"
+live() {  # recolor the screen right now (used while scrolling the menu)
+  if is_termux; then
+    render "$1" "$HOME" .termux/colors.properties
+    termux-reload-settings 2>/dev/null || true
+  elif [[ -n ${KITTY_LISTEN_ON:-} ]] && has kitty; then
+    local tmp; tmp=$(mktemp -d)
+    render "$1" "$tmp" .config/kitty/theme.conf
+    kitty @ set-colors --all "$tmp/.config/kitty/theme.conf" >/dev/null 2>&1 || true
+    rm -rf "$tmp"
+  fi
 }
 
 swatch() {  # pretty preview of a theme's palette
-  local f; f=$(theme_file "$1")
-  printf '\n  \e[1m%s\e[0m\n\n' "$(sed -n 's/^name *= *//p' "$f")"
-  local k v
+  local f k v; f=$(theme_file "$1")
+  printf '\n  \e[1m%s\e[0m\n\n' "$(theme_name "$1")"
   for k in bg surface fg muted accent accent2 red green yellow blue magenta cyan; do
     v=$(sed -n "s/^$k *= *//p" "$f")
     [[ $v =~ ^#(..)(..)(..)$ ]] || continue
@@ -68,19 +80,19 @@ swatch() {  # pretty preview of a theme's palette
 }
 
 apply() {
-  local id=$1 f; f=$(theme_file "$id")
-  render "$f" "$HOME"
-  state_set THEME "$id"
+  render "$1" "$HOME"
+  state_set THEME "$1"
   reload_apps
-  ui_ok "theme → $(sed -n 's/^name *= *//p' "$f")"
+  ui_ok "theme → $(theme_name "$1")"
 }
 
 case "${1:-menu}" in
   list)     theme_ids ;;
   current)  state_get THEME ;;
+  name)     theme_name "${2:-$(state_get THEME)}" ;;
   apply)    apply "${2:?usage: $ARDAOS_CMD theme apply <id>}" ;;
   _swatch)  swatch "$2" ;;
-  _live)    kitty_live "$2" ;;
+  _live)    live "$2" ;;
   menu)
     has fzf || { ui_fail "fzf missing — use: $ARDAOS_CMD theme apply <id>"; theme_ids; exit 1; }
     current=$(state_get THEME); self="$ARDAOS_LIB/commands/theme"
@@ -90,8 +102,8 @@ case "${1:-menu}" in
         --bind "focus:execute-silent($self _live {})"); then
       apply "$pick"
     else
-      [[ -n $current ]] && kitty_live "$current"   # put the old colors back
+      if [[ -n $current ]]; then live "$current"; fi   # put the old colors back
       ui_info "nothing changed"
     fi ;;
-  *) ui_fail "usage: $ARDAOS_CMD theme [list|current|apply <id>]"; exit 1 ;;
+  *) ui_fail "usage: $ARDAOS_CMD theme [list|current|name|apply <id>]"; exit 1 ;;
 esac

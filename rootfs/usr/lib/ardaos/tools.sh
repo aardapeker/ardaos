@@ -3,9 +3,11 @@
 # Used by the image build AND by `arda update`. List: $ARDAOS_SHARE/github-tools.list
 set -uo pipefail
 
-LIST="${1:-${ARDAOS_SHARE:-/usr/share/ardaos}/github-tools.list}"
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"   # /usr, or $PREFIX in Termux
+LIST="${1:-$ROOT/share/ardaos/github-tools.list}"
 BIN_DIR="${ARDAOS_BIN_DIR:-/usr/local/bin}"
-FONT_DIR="${ARDAOS_FONT_DIR:-/usr/share/fonts/ardaos}"
+FONT_DIR="${ARDAOS_FONT_DIR:-$ROOT/share/fonts/ardaos}"
+KINDS="${ARDAOS_KINDS:-bin font}"   # Termux only needs fonts (its tools come from pkg)
 failed=()
 
 asset_url() {  # asset_url owner/repo regex → download URL of the latest matching asset
@@ -55,6 +57,7 @@ trim() { local s=$1; s=${s#"${s%%[![:space:]]*}"}; printf '%s' "${s%"${s##*[![:s
 while IFS='|' read -r kind repo regex names; do
   kind=$(trim "$kind")
   [[ -z $kind || $kind == \#* ]] && continue
+  [[ " $KINDS " == *" $kind "* ]] || continue
   names=$(trim "$names")
   install_one "$kind" "$(trim "$repo")" "$(trim "$regex")" "$names" || failed+=("$names")
 done < "$LIST"

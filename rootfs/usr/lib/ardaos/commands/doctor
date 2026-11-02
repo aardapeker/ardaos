@@ -11,15 +11,24 @@ check() {  # check "label" command...
 ui_title "${DISTRO_NAME:-ArdaOS} doctor"
 
 echo "  tools"
-for c in sway kitty fish starship eza bat zoxide fd rg fzf yazi lazygit btop nvim gum \
-         fastfetch atuin zellij spotify_player firefox code podman node java; do
+tools="fish starship eza bat zoxide fd rg fzf yazi lazygit btop nvim gum fastfetch atuin zellij"
+is_termux || tools="sway kitty $tools spotify_player firefox code podman node java"
+for c in $tools; do
   check "$c" has "$c"
 done
 
 echo; echo "  fonts"
 for f in "JetBrains Mono" "Maple Mono" "Iosevka"; do
-  check "$f" sh -c "fc-list : family | grep -qiF '$f'"
+  if is_termux; then check "$f" test -d "$ARDAOS_FONT_DIR/${f// /-}"
+  else check "$f" sh -c "fc-list : family | grep -qiF '$f'"; fi
 done
+
+if is_termux; then
+  check "theme ($(state_get THEME))" test -f "$HOME/.termux/colors.properties"
+  check "font file" test -f "$HOME/.termux/font.ttf"
+  echo; ((fails == 0)) && ui_ok "all good, dude 😎" || ui_warn "$fails problem(s). Re-run termux-install.sh"
+  exit $((fails > 0))
+fi
 
 echo; echo "  system"
 check "network"  sh -c "nmcli -t -f STATE general | grep -q '^connected'"

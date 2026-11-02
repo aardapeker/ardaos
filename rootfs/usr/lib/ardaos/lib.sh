@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 # ArdaOS shared helpers — sourced by every arda command. Keep UI logic HERE (DRY).
 
-ARDAOS_ETC="${ARDAOS_ETC:-/etc/ardaos}"
+# Paths are relative to where arda is installed, so the same code runs on
+# Fedora (/usr/...) and in Termux ($PREFIX/...). /etc is the one exception.
 ARDAOS_LIB="${ARDAOS_LIB:-/usr/lib/ardaos}"
-ARDAOS_SHARE="${ARDAOS_SHARE:-/usr/share/ardaos}"
+_root="$(cd "$ARDAOS_LIB/../.." && pwd)"
+ARDAOS_SHARE="${ARDAOS_SHARE:-$_root/share/ardaos}"
+if [[ -z ${ARDAOS_ETC:-} ]]; then
+  if [[ -d /etc/ardaos ]]; then ARDAOS_ETC=/etc/ardaos; else ARDAOS_ETC="$_root/etc/ardaos"; fi
+fi
+ARDAOS_FONT_DIR="${ARDAOS_FONT_DIR:-$_root/share/fonts/ardaos}"
 ARDAOS_STATE="${XDG_CONFIG_HOME:-$HOME/.config}/ardaos/state"
+export ARDAOS_LIB ARDAOS_SHARE ARDAOS_ETC ARDAOS_FONT_DIR
+
+is_termux() { [[ -n ${TERMUX_VERSION:-} ]]; }
 
 # shellcheck source=../../../etc/ardaos/identity.conf
 [[ -f $ARDAOS_ETC/identity.conf ]] && source "$ARDAOS_ETC/identity.conf"

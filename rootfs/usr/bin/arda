@@ -3,7 +3,8 @@
 # Each command is a small script in $ARDAOS_LIB/commands/.
 set -euo pipefail
 
-ARDAOS_LIB="${ARDAOS_LIB:-/usr/lib/ardaos}"
+# lib lives next to bin: /usr/bin → /usr/lib/ardaos, $PREFIX/bin → $PREFIX/lib/ardaos (Termux)
+ARDAOS_LIB="${ARDAOS_LIB:-$(cd "$(dirname "$(readlink -f "$0")")/../lib/ardaos" && pwd)}"
 export ARDAOS_LIB
 export ARDAOS_CMD="${0##*/}"   # "arda" or "bruh" — depends on how you called it 😏
 

@@ -18,9 +18,11 @@ end
 
 # modern replacements — same muscle memory, prettier output
 if command -q eza
-    alias ls 'eza --icons --group-directories-first'
-    alias ll 'eza -la --icons --git --group-directories-first'
-    alias tree 'eza --tree --icons'
+    set -l icons --icons
+    set -q TERMUX_VERSION; and set icons   # Termux fonts have no icon glyphs
+    alias ls "eza $icons --group-directories-first"
+    alias ll "eza -la $icons --git --group-directories-first"
+    alias tree "eza --tree $icons"
 end
 command -q bat; and alias cat 'bat --paging=never'
 set -gx BAT_THEME ansi
