@@ -16,11 +16,14 @@ ROOTFS="$REPO/rootfs"
 source "$ROOTFS/etc/ardaos/identity.conf"
 
 # --- 1. packages (one by one, so one missing package doesn't stop the rest) ---
+say "Upgrading Termux first (mixing old and new packages breaks things)…"
+pkg upgrade -y
+
 say "Installing the terminal stack…"
-pkg update -y
 for p in fish starship eza bat zoxide fd ripgrep fzf yazi lazygit btop neovim gum \
          fastfetch tealdeer zellij atuin git jq curl unzip procps termux-tools; do
-  pkg install -y "$p" >/dev/null 2>&1 || warn "couldn't install $p (skipping)"
+  printf '   %-12s' "$p"
+  if pkg install -y "$p" >/dev/null 2>&1; then echo "✓"; else echo "✗ (skipping)"; fi
 done
 
 # --- 2. the ArdaOS layer: same files as the ISO, just under $PREFIX ----------
