@@ -76,7 +76,7 @@ call() {  # call provider question → raw model text
   "call_$1" "$(system_prompt)" "$2" "$(var KEY "$1")" "$(var MODEL "$1")"
 }
 # the spinner runs a new process, so it calls this script again: arda ask _call <provider> <question>
-spin_call() { ui_spin_out "$1" "$0" _call "$2" "$3" 2>&1 || true; }
+spin_call() { ui_spin_out "$1" bash "$0" _call "$2" "$3" 2>&1 || true; }
 
 # --- setup / status --------------------------------------------------------------
 setup() {

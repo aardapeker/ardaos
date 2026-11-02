@@ -66,15 +66,17 @@ ui_confirm() {
   fi
 }
 
+# gum is a Go program: on Android it can't run scripts with "#!/usr/bin/env" shebangs
+# (npm, our own commands…). Going through bash fixes it, and is harmless on Fedora.
 ui_spin_out() {  # like ui_spin, but prints the command's output (for capturing it)
   local title=$1; shift
-  if has gum; then gum spin --spinner dot --show-output --title " $title" -- "$@"
+  if has gum; then gum spin --spinner dot --show-output --title " $title" -- bash -c '"$@"' bash "$@"
   else "$@"; fi
 }
 
 ui_spin() {  # ui_spin "title" command args...
   local title=$1; shift
-  if has gum; then gum spin --spinner dot --show-error --title " $title" -- "$@"
+  if has gum; then gum spin --spinner dot --show-error --title " $title" -- bash -c '"$@"' bash "$@"
   else echo "… $title"; "$@"
   fi
 }
