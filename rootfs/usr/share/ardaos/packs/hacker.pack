@@ -5,7 +5,7 @@ netcat-openbsd  | nmap-ncat     | nc — raw TCP/UDP swiss-army knife
 dnsutils        | bind-utils    | dig / nslookup — DNS lookups
 whois           | whois         | who owns a domain or IP
 traceroute      | traceroute    | the path packets take to a host
-mtr             | mtr           | live traceroute + packet loss
+-               | mtr           | live traceroute + packet loss (laptop only)
 openssl-tool    | openssl       | inspect TLS certificates
 httpie          | httpie        | friendly HTTP requests (http GET ...)
 -               | tcpdump       | packet capture (laptop only, needs root)
