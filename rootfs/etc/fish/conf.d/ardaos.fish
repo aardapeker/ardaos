@@ -25,18 +25,19 @@ end
 
 # modern replacements — same muscle memory, prettier output
 if command -q eza
-    set -l icons --icons
-    set -q TERMUX_VERSION; and set icons   # Termux fonts have no icon glyphs
-    alias ls "eza $icons --group-directories-first"
-    alias ll "eza -la $icons --git --group-directories-first"
-    alias tree "eza --tree $icons"
+    alias ls 'eza --icons --group-directories-first'
+    alias ll 'eza -la --icons --git --group-directories-first'
+    alias tree 'eza --tree --icons'
 end
 command -q bat; and alias cat 'bat --paging=never'
 set -gx BAT_THEME ansi
 command -q fd; or alias fd fdfind
 command -q zoxide; and zoxide init fish --cmd cd | source
 command -q starship; and starship init fish | source
-command -q atuin; and atuin init fish --disable-up-arrow | source
+# atuin can't create its key file on Android — the phone uses fish's own Ctrl+R
+if command -q atuin; and not set -q TERMUX_VERSION
+    atuin init fish --disable-up-arrow | source
+end
 
 # daily verbs
 alias go 'arda go'

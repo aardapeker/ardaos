@@ -10,6 +10,7 @@ bin  | charmbracelet/gum      | _linux_x86_64\.tar\.gz$                         
 bin  | atuinsh/atuin          | atuin-x86_64-unknown-linux-gnu\.tar\.gz$       | atuin
 bin  | aome510/spotify-player | x86_64-unknown-linux-gnu\.tar\.gz$              | spotify_player
 
-font | JetBrains/JetBrainsMono  | ^JetBrainsMono-[0-9.]+\.zip$                   | JetBrains Mono
-font | subframe7536/maple-font | ^MapleMono-TTF\.zip$                           | Maple Mono
-font | be5invis/Iosevka        | ^PkgTTF-Iosevka-[0-9.]+\.zip$                  | Iosevka
+# Nerd Font versions (icons included) — .tar.xz is ~10x smaller than .zip
+font | ryanoasis/nerd-fonts     | ^JetBrainsMono\.tar\.xz$                      | JetBrainsMono-NF
+font | subframe7536/maple-font  | ^MapleMono-NF\.zip$                            | MapleMono-NF
+font | ryanoasis/nerd-fonts     | ^Iosevka\.tar\.xz$                            | Iosevka-NF

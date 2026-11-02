@@ -47,7 +47,7 @@ install_one() {  # kind repo regex names
   else  # font: only the 4 everyday styles, keeps the image small
     local dest="$FONT_DIR/${names// /-}"
     mkdir -p "$dest"
-    find "$tmp" -type f \( -iname '*-Regular.ttf' -o -iname '*-Bold.ttf' \
+    find "$tmp" -type f ! -iname '*Propo*' \( -iname '*-Regular.ttf' -o -iname '*-Bold.ttf' \
       -o -iname '*-Italic.ttf' -o -iname '*-BoldItalic.ttf' \) -exec install -m644 {} "$dest/" \;
     [[ -n $(ls -A "$dest") ]] || { echo "✗ $repo: no font files found"; ok=0; }
   fi

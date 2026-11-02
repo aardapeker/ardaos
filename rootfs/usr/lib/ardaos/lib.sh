@@ -15,6 +15,22 @@ export ARDAOS_LIB ARDAOS_SHARE ARDAOS_ETC ARDAOS_FONT_DIR
 
 is_termux() { [[ -n ${TERMUX_VERSION:-} ]]; }
 
+# Fonts: Nerd Font versions, so icons work everywhere (yazi, eza, starship), phone included.
+# display name | folder (= name in github-tools.list) | font family name
+ARDAOS_FONTS=(
+  "JetBrains Mono|JetBrainsMono-NF|JetBrainsMono Nerd Font"
+  "Maple Mono|MapleMono-NF|Maple Mono NF"
+  "Iosevka|Iosevka-NF|Iosevka Nerd Font"
+)
+# shellcheck disable=SC2034  # FONT_DIRNAME/FONT_FAMILY are read by the commands
+font_lookup() {  # font_lookup "display name" → sets FONT_DIRNAME, FONT_FAMILY
+  local f
+  for f in "${ARDAOS_FONTS[@]}"; do
+    if [[ ${f%%|*} == "$1" ]]; then IFS='|' read -r _ FONT_DIRNAME FONT_FAMILY <<< "$f"; return 0; fi
+  done
+  return 1
+}
+
 # shellcheck source=../../../etc/ardaos/identity.conf
 [[ -f $ARDAOS_ETC/identity.conf ]] && source "$ARDAOS_ETC/identity.conf"
 ARDAOS_CMD="${ARDAOS_CMD:-${COMMAND_NAME:-arda}}"

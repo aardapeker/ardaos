@@ -11,17 +11,18 @@ check() {  # check "label" command...
 ui_title "${DISTRO_NAME:-ArdaOS} doctor"
 
 echo "  tools"
-tools="fish starship eza bat zoxide fd rg fzf yazi lazygit nvim gum fastfetch atuin zellij"
+tools="fish starship eza bat zoxide fd rg fzf yazi lazygit nvim gum fastfetch zellij"
 if is_termux; then tools="$tools htop"
-else tools="sway kitty btop $tools spotify_player firefox code podman node java"; fi
+else tools="sway kitty btop atuin $tools spotify_player firefox code podman node java"; fi
 for c in $tools; do
   check "$c" has "$c"
 done
 
 echo; echo "  fonts"
-for f in "JetBrains Mono" "Maple Mono" "Iosevka"; do
-  if is_termux; then check "$f" test -d "$ARDAOS_FONT_DIR/${f// /-}"
-  else check "$f" sh -c "fc-list : family | grep -qiF '$f'"; fi
+for f in "${ARDAOS_FONTS[@]}"; do
+  IFS='|' read -r name dir family <<< "$f"
+  if is_termux; then check "$name" test -d "$ARDAOS_FONT_DIR/$dir"
+  else check "$name" sh -c "fc-list : family | grep -qiF '$family'"; fi
 done
 
 if is_termux; then
