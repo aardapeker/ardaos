@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# desc: shutdown / reboot / sleep / log out
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+choice=$(ui_choose "power" "Shutdown" "Reboot" "Sleep" "Log out" "Cancel") || exit 0
+case $choice in
+  Shutdown) systemctl poweroff ;;
+  Reboot)   systemctl reboot ;;
+  Sleep)    systemctl suspend ;;
+  "Log out") if in_sway; then swaymsg exit; else loginctl terminate-session "${XDG_SESSION_ID:-}"; fi ;;
+  *)        ui_info "bruh, ok. nothing happened." ;;
+esac

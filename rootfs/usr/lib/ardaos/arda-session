@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Starts the ArdaOS terminal desktop (sway, invisible) from tty1.
+export XDG_CURRENT_DESKTOP=sway
+export XDG_SESSION_TYPE=wayland
+export MOZ_ENABLE_WAYLAND=1
+export ELECTRON_OZONE_PLATFORM_HINT=auto
+export QT_QPA_PLATFORM="wayland;xcb"
+
+# Virtual machines (GNOME Boxes) often lack hardware cursors and sometimes 3D.
+if systemd-detect-virt -q 2>/dev/null; then
+  export WLR_NO_HARDWARE_CURSORS=1
+fi
+if ! compgen -G "/dev/dri/renderD*" >/dev/null; then
+  export WLR_RENDERER=pixman          # no GPU → software rendering
+  export LIBGL_ALWAYS_SOFTWARE=1
+fi
+
+exec sway "$@" 2> "${XDG_RUNTIME_DIR:-/tmp}/ardaos-sway.log"

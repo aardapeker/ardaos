@@ -1,0 +1,50 @@
+# ArdaOS sway — the invisible compositor. No bar, no borders, no desktop.
+# The terminal on workspace 1 is "home". Apps open on their own workspaces.
+
+include ~/.config/sway/theme
+include /etc/ardaos/sway-keyboard
+
+set $mod Mod4
+
+default_border none
+default_floating_border none
+hide_edge_borders both
+gaps inner 0
+focus_follows_mouse no
+floating_modifier $mod normal
+
+# home terminal (comes back if you close it)
+exec /usr/lib/ardaos/arda-home
+for_window [app_id="ardaos-home"] move container to workspace 1
+
+# apps get their own workspace
+assign [app_id="firefox"] workspace 2
+assign [app_id="(?i)code"] workspace 3
+assign [class="(?i)code"] workspace 3
+assign [app_id="ardaos-app"] workspace 4
+
+# the launcher floats in the middle, Spotlight-style
+for_window [app_id="ardaos-launcher"] floating enable, resize set 760 460, move position center
+
+# keys
+bindsym $mod+space       exec kitty --class ardaos-launcher -e arda go
+bindsym $mod+Escape      workspace 1
+bindsym $mod+h           workspace 1
+bindsym $mod+Tab         workspace next
+bindsym $mod+Shift+Tab   workspace prev
+bindsym $mod+q           kill
+bindsym $mod+f           fullscreen toggle
+bindsym $mod+Shift+e     exec kitty --class ardaos-launcher -e arda power
+bindsym $mod+Shift+r     reload
+bindsym $mod+1 workspace 1
+bindsym $mod+2 workspace 2
+bindsym $mod+3 workspace 3
+bindsym $mod+4 workspace 4
+bindsym $mod+5 workspace 5
+
+# media keys
+bindsym XF86AudioRaiseVolume exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+
+bindsym XF86AudioLowerVolume exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
+bindsym XF86AudioMute        exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+
+exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP

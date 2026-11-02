@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# desc: show all commands
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+if [[ $ARDAOS_CMD == bruh ]]; then ui_title "bruh. here's what I can do"
+else ui_title "${DISTRO_NAME:-ArdaOS} — $ARDAOS_CMD <command>"; fi
+
+for f in "$ARDAOS_LIB"/commands/*; do
+  name=${f##*/}
+  desc=$(sed -n 's/^# desc: //p' "$f" | head -1)
+  printf '  \e[1m%-8s\e[0m %s\n' "$name" "$desc"
+done
+
+echo
+ui_info "shortcuts: go · web · music · files · lg · sys · wifi · vol · cheat · home"

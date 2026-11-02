@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# The one command to rule ArdaOS: arda <command> [args]
+# Each command is a small script in $ARDAOS_LIB/commands/.
+set -euo pipefail
+
+ARDAOS_LIB="${ARDAOS_LIB:-/usr/lib/ardaos}"
+export ARDAOS_LIB
+export ARDAOS_CMD="${0##*/}"   # "arda" or "bruh" — depends on how you called it 😏
+
+cmd="${1:-help}"
+[[ $# -gt 0 ]] && shift
+case $cmd in -h|--help) cmd=help ;; esac
+
+target="$ARDAOS_LIB/commands/$cmd"
+if [[ ! -x $target ]]; then
+  printf '\e[31m✗\e[0m unknown command: %s\n' "$cmd" >&2
+  exec "$ARDAOS_LIB/commands/help"
+fi
+exec "$target" "$@"

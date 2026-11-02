@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# The home terminal. Close it and it comes right back.
+# If kitty keeps crashing instantly (no OpenGL in the VM), fall back to foot.
+fast_fails=0
+while true; do
+  start=$SECONDS
+  if ((fast_fails < 3)); then
+    kitty --class ardaos-home
+  else
+    foot --app-id ardaos-home
+  fi
+  if ((SECONDS - start < 2)); then ((fast_fails++)); sleep 1; else sleep 0.3; fi
+done

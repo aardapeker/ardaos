@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# desc: check that everything works
+set -uo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+fails=0
+check() {  # check "label" command...
+  if "${@:2}" >/dev/null 2>&1; then ui_ok "$1"; else ui_fail "$1"; ((fails++)); fi
+}
+
+ui_title "${DISTRO_NAME:-ArdaOS} doctor"
+
+echo "  tools"
+for c in sway kitty fish starship eza bat zoxide fd rg fzf yazi lazygit btop nvim gum \
+         fastfetch atuin zellij spotify_player firefox code podman node java; do
+  check "$c" has "$c"
+done
+
+echo; echo "  fonts"
+for f in "JetBrains Mono" "Maple Mono" "Iosevka"; do
+  check "$f" sh -c "fc-list : family | grep -qiF '$f'"
+done
+
+echo; echo "  system"
+check "network"  sh -c "nmcli -t -f STATE general | grep -q '^connected'"
+check "internet" getent hosts github.com
+check "audio"    wpctl status
+check "podman"   podman info
+check "theme ($(state_get THEME))" test -f "$HOME/.config/kitty/theme.conf"
+check "3D acceleration" sh -c 'ls /dev/dri/renderD*'
+has systemd-detect-virt && ui_info "running on: $(systemd-detect-virt 2>/dev/null || echo 'real hardware')"
+
+echo
+if ((fails == 0)); then ui_ok "all good, dude 😎"
+else ui_warn "$fails problem(s). No 3D? Turn on 3D acceleration in Boxes."; fi
+exit $((fails > 0))

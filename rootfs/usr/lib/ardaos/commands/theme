@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# desc: switch the color theme everywhere (live preview!)
+#   arda theme              → menu with live preview
+#   arda theme apply <id>   → apply directly
+#   arda theme list | current
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+THEMES="$ARDAOS_SHARE/themes"
+TEMPLATES="$ARDAOS_SHARE/templates"
+
+theme_file() { local f="$THEMES/$1.theme"; [[ -f $f ]] || { ui_fail "no theme '$1'"; exit 1; }; echo "$f"; }
+theme_ids()  { for f in "$THEMES"/*.theme; do basename "$f" .theme; done; }
+
+# Turn a theme file (key=value) into a sed script: {{key}}, {{key_hex}}, {{key_rgb}}
+sed_script() {
+  local key val
+  while IFS='=' read -r key val; do
+    key=${key//[[:space:]]/}; val=${val#"${val%%[![:space:]]*}"}; val=${val%"${val##*[![:space:]]}"}
+    [[ -z $key || $key == \#* ]] && continue
+    printf 's|{{%s}}|%s|g\n' "$key" "$val"
+    if [[ $val =~ ^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$ ]]; then
+      printf 's|{{%s_hex}}|%s|g\n' "$key" "${val#\#}"
+      printf 's|{{%s_rgb}}|%d;%d;%d|g\n' "$key" \
+        "0x${BASH_REMATCH[1]}" "0x${BASH_REMATCH[2]}" "0x${BASH_REMATCH[3]}"
+    fi
+  done < "$1"
+}
+
+# Render every template into <dest> (normally $HOME), same relative path.
+render() {
+  local script dest=$2 tmpl rel
+  script=$(mktemp); sed_script "$1" > "$script"
+  while IFS= read -r -d '' tmpl; do
+    rel=${tmpl#"$TEMPLATES"/}
+    mkdir -p "$dest/$(dirname "$rel")"
+    sed -f "$script" "$tmpl" > "$dest/$rel"
+    grep -q '{{' "$dest/$rel" && ui_warn "unfilled placeholder in $rel"
+  done < <(find "$TEMPLATES" -type f -print0)
+  rm -f "$script"
+}
+
+reload_apps() {
+  pkill -USR1 -x kitty 2>/dev/null || true          # kitty re-reads its config
+  in_sway && swaymsg reload >/dev/null 2>&1 || true   # wallpaper + borders
+}
+
+kitty_live() {  # recolor the running kitty without touching any file
+  [[ -n ${KITTY_LISTEN_ON:-} ]] && has kitty || return 0
+  local script conf
+  script=$(mktemp); conf=$(mktemp --suffix=.conf)
+  sed_script "$(theme_file "$1")" > "$script"
+  sed -f "$script" "$TEMPLATES/.config/kitty/theme.conf" > "$conf"
+  kitty @ set-colors --all "$conf" >/dev/null 2>&1 || true
+  rm -f "$script" "$conf"
+}
+
+swatch() {  # pretty preview of a theme's palette
+  local f; f=$(theme_file "$1")
+  printf '\n  \e[1m%s\e[0m\n\n' "$(sed -n 's/^name *= *//p' "$f")"
+  local k v
+  for k in bg surface fg muted accent accent2 red green yellow blue magenta cyan; do
+    v=$(sed -n "s/^$k *= *//p" "$f")
+    [[ $v =~ ^#(..)(..)(..)$ ]] || continue
+    printf '  \e[48;2;%d;%d;%dm      \e[0m  %-8s %s\n' \
+      "0x${BASH_REMATCH[1]}" "0x${BASH_REMATCH[2]}" "0x${BASH_REMATCH[3]}" "$k" "$v"
+  done
+}
+
+apply() {
+  local id=$1 f; f=$(theme_file "$id")
+  render "$f" "$HOME"
+  state_set THEME "$id"
+  reload_apps
+  ui_ok "theme → $(sed -n 's/^name *= *//p' "$f")"
+}
+
+case "${1:-menu}" in
+  list)     theme_ids ;;
+  current)  state_get THEME ;;
+  apply)    apply "${2:?usage: $ARDAOS_CMD theme apply <id>}" ;;
+  _swatch)  swatch "$2" ;;
+  _live)    kitty_live "$2" ;;
+  menu)
+    has fzf || { ui_fail "fzf missing — use: $ARDAOS_CMD theme apply <id>"; theme_ids; exit 1; }
+    current=$(state_get THEME); self="$ARDAOS_LIB/commands/theme"
+    if pick=$(theme_ids | fzf --prompt "theme ❯ " --height 100% \
+        --header "↑↓ preview live · Enter apply · Esc cancel" \
+        --preview "$self _swatch {}" --preview-window right,60% \
+        --bind "focus:execute-silent($self _live {})"); then
+      apply "$pick"
+    else
+      [[ -n $current ]] && kitty_live "$current"   # put the old colors back
+      ui_info "nothing changed"
+    fi ;;
+  *) ui_fail "usage: $ARDAOS_CMD theme [list|current|apply <id>]"; exit 1 ;;
+esac

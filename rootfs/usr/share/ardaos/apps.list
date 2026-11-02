@@ -1,0 +1,9 @@
+web|Firefox|firefox|gui
+code|VS Code|code|gui
+music|Spotify|spotify_player|tui
+files|Files|yazi|tui
+git|Git|lazygit|tui
+sys|System monitor|btop|tui
+wifi|Wi-Fi|nmtui|tui
+vol|Volume|pulsemixer|tui
+term|New terminal|kitty|gui
