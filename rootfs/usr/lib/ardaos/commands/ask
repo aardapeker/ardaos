@@ -2,6 +2,7 @@
 # desc: ask AI for a command — Claude, Gemini or any OpenAI-compatible API (ai … / ? …)
 #   arda ask setup     → pick a provider, paste its key, test it (keys are kept per provider)
 #   arda ask status    → which AI is active
+#   arda ask test      → raw answer from the active AI (for debugging)
 #   arda ask <text>    → get a command, then Run / Edit / Copy / Cancel
 set -euo pipefail
 source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
@@ -75,8 +76,18 @@ EOF
 call() {  # call provider question → raw model text
   "call_$1" "$(system_prompt)" "$2" "$(var KEY "$1")" "$(var MODEL "$1")"
 }
-# the spinner runs a new process, so it calls this script again: arda ask _call <provider> <question>
-spin_call() { ui_spin_out "$1" bash "$0" _call "$2" "$3" 2>&1 || true; }
+# our own tiny spinner (pure bash) — no separate process, works the same on Android and Fedora
+spin_call() {  # spin_call "title" provider question → raw model text
+  local f pid i=0 frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  f=$(mktemp)
+  ( call "$2" "$3" >"$f" 2>&1 ) & pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    printf '\r  \e[38;2;122;162;247m%s\e[0m %s ' "${frames:i++%10:1}" "$1" >&2; sleep 0.1
+  done
+  wait "$pid" || true
+  printf '\r\e[K' >&2
+  cat "$f"; rm -f "$f"
+}
 
 # --- setup / status --------------------------------------------------------------
 setup() {
@@ -109,7 +120,11 @@ setup() {
   conf_set "KEY_$id" "$key"; conf_set "MODEL_$id" "$model"
   local out; out=$(spin_call "testing $pick" "$id" 'Reply with {"command":"","explain":"hi"}')
   if ! jq -e . >/dev/null 2>&1 <<< "$(sed -e 's/^```[a-z]*//' -e 's/```$//' <<< "$out")"; then
-    ui_fail "${out:-no answer}"; ui_info "key + model saved anyway — fix and run setup again"; exit 1
+    ui_fail "the test didn't work. Here's what came back:"
+    printf '\n\e[2m%s\e[0m\n\n' "${out:-(nothing — check your internet)}"
+    if ui_confirm "Use $pick anyway?"; then conf_set AI_PROVIDER "$id"; ui_warn "active, but answers may fail"
+    else ui_info "nothing activated — run '$ARDAOS_CMD ask setup' again"; fi
+    exit 1
   fi
   conf_set AI_PROVIDER "$id"
   ui_ok "$pick answers! Active now · $model"
@@ -143,7 +158,7 @@ copy() {
 
 ask() {
   load
-  if [[ -z ${AI_PROVIDER:-} ]]; then ui_warn "AI isn't set up yet"; setup; load; fi
+  if [[ -z ${AI_PROVIDER:-} ]]; then ui_warn "AI isn't set up yet — run: $ARDAOS_CMD ask setup"; exit 1; fi
   local q="$*" raw cmd explain
   [[ -n $q ]] || q=$(input "what do you want to do?")
   [[ -n $q ]] || exit 0
@@ -171,7 +186,7 @@ ask() {
 }
 
 case "${1:-}" in
-  _call)  load; call "$2" "$3" ;;
+  test)   load; call "${AI_PROVIDER:?not set up yet}" 'Reply with {"command":"","explain":"hi"}' ;;
   setup)  setup ;;
   status) status ;;
   *)      ask "$@" ;;
