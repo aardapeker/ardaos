@@ -29,6 +29,10 @@ fetch() {  # fetch url dir → downloads and unpacks into dir
 
 install_one() {  # kind repo regex names
   local kind=$1 repo=$2 regex=$3 names=$4 url tmp ok=1
+  # fonts never really change — don't re-download them on every update (slow on mobile data)
+  if [[ $kind == font && -n $(ls -A "$FONT_DIR/${names// /-}" 2>/dev/null) ]]; then
+    echo "✓ $names (already installed)"; return 0
+  fi
   url=$(asset_url "$repo" "$regex")
   [[ -n $url ]] || { echo "✗ $repo: no asset matching '$regex'"; return 1; }
   tmp=$(mktemp -d)
