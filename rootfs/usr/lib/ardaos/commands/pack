@@ -27,16 +27,19 @@ case "${1:-list}" in
     ui_title "$p pack"
     sed -n 's/^# desc: /  /p' "$(pack_file "$p")"; echo
     while IFS='|' read -r pkg what; do
-      [[ $pkg == - ]] && printf '  \e[2m%-16s %s\e[0m\n' "(n/a here)" "$what" || printf '  \e[1m%-16s\e[0m %s\n' "$pkg" "$what"
+      [[ $pkg == - ]] && printf '  \e[2m%-22s %s\e[0m\n' "(n/a here)" "$what" || printf '  \e[1m%-22s\e[0m %s\n' "$pkg" "$what"
     done < <(rows "$p") ;;
   install)
     p=${2:?usage: $ARDAOS_CMD pack install <pack>}
     ui_title "installing the $p pack"
     is_termux || sudo -v
+    sudo_=(); is_termux || sudo_=(sudo)
     while IFS='|' read -r pkg _; do
       [[ $pkg == - ]] && continue
-      if is_termux; then ui_spin "$pkg" pkg install -y "$pkg" && ui_ok "$pkg" || ui_warn "$pkg not available, skipped"
-      else ui_spin "$pkg" sudo dnf install -y "$pkg" && ui_ok "$pkg" || ui_warn "$pkg not available, skipped"; fi
+      if [[ $pkg == npm:* ]]; then cmd=("${sudo_[@]}" npm install -g "${pkg#npm:}")
+      elif is_termux; then cmd=(pkg install -y "$pkg")
+      else cmd=(sudo dnf install -y "$pkg"); fi
+      if ui_spin "${pkg#npm:}" "${cmd[@]}"; then ui_ok "${pkg#npm:}"; else ui_warn "${pkg#npm:} not available, skipped"; fi
     done < <(rows "$p")
     ui_info "see what you got: $ARDAOS_CMD pack show $p" ;;
   *) ui_fail "usage: $ARDAOS_CMD pack [list|show <pack>|install <pack>]"; exit 1 ;;

@@ -1,0 +1,9 @@
+# desc: TypeScript + Java kit — Node, tsc, tsx, Java 21, Maven, Gradle, GitHub CLI
+# termux package | fedora package | what it's for   ("npm:x" = installed with npm, "-" = not there)
+nodejs-lts      | nodejs                | Node.js + npm
+npm:typescript  | npm:typescript        | tsc — the TypeScript compiler
+npm:tsx         | npm:tsx               | run .ts files directly: tsx app.ts
+openjdk-21      | java-21-openjdk-devel | Java 21 (javac + java)
+maven           | maven                 | mvn — builds Spring Boot projects
+gradle          | -                     | gradle (laptop: use the project's ./gradlew)
+gh              | gh                    | GitHub CLI — gh repo clone, gh pr create …
