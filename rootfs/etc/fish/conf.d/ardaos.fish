@@ -37,7 +37,7 @@ alias web 'arda go web'
 alias music spotify_player
 alias files yazi
 alias lg lazygit
-# system monitor: btop on the desktop, bottom/htop in Termux (no btop package there)
+# system monitor: btop on the desktop, htop in Termux (no btop package there)
 for m in btop btm htop
     if command -q $m; alias sys $m; break; end
 end

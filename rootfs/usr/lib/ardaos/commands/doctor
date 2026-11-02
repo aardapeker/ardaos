@@ -12,7 +12,7 @@ ui_title "${DISTRO_NAME:-ArdaOS} doctor"
 
 echo "  tools"
 tools="fish starship eza bat zoxide fd rg fzf yazi lazygit nvim gum fastfetch atuin zellij"
-if is_termux; then tools="$tools btm"
+if is_termux; then tools="$tools htop"
 else tools="sway kitty btop $tools spotify_player firefox code podman node java"; fi
 for c in $tools; do
   check "$c" has "$c"
