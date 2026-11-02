@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# desc: extra tool packs (arda pack list · arda pack show hacker · arda pack install hacker)
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+PACKS="$ARDAOS_SHARE/packs"
+pack_file() { local f="$PACKS/$1.pack"; [[ -f $f ]] || { ui_fail "no pack '$1' — try: $ARDAOS_CMD pack list"; exit 1; }; echo "$f"; }
+trim() { local s=$1; s=${s#"${s%%[![:space:]]*}"}; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
+
+rows() {  # rows <pack> → "package|what" for THIS machine (Termux or Fedora)
+  local t f what
+  while IFS='|' read -r t f what; do
+    t=$(trim "$t"); [[ -z $t || $t == \#* ]] && continue
+    f=$(trim "$f"); what=$(trim "$what")
+    if is_termux; then echo "$t|$what"; else echo "$f|$what"; fi
+  done < "$(pack_file "$1")"
+}
+
+case "${1:-list}" in
+  list)
+    ui_title "packs"
+    for f in "$PACKS"/*.pack; do
+      printf '  \e[1m%-8s\e[0m %s\n' "$(basename "$f" .pack)" "$(sed -n 's/^# desc: //p' "$f")"
+    done ;;
+  show)
+    p=${2:?usage: $ARDAOS_CMD pack show <pack>}
+    ui_title "$p pack"
+    sed -n 's/^# desc: /  /p' "$(pack_file "$p")"; echo
+    while IFS='|' read -r pkg what; do
+      [[ $pkg == - ]] && printf '  \e[2m%-16s %s\e[0m\n' "(n/a here)" "$what" || printf '  \e[1m%-16s\e[0m %s\n' "$pkg" "$what"
+    done < <(rows "$p") ;;
+  install)
+    p=${2:?usage: $ARDAOS_CMD pack install <pack>}
+    ui_title "installing the $p pack"
+    is_termux || sudo -v
+    while IFS='|' read -r pkg _; do
+      [[ $pkg == - ]] && continue
+      if is_termux; then ui_spin "$pkg" pkg install -y "$pkg" && ui_ok "$pkg" || ui_warn "$pkg not available, skipped"
+      else ui_spin "$pkg" sudo dnf install -y "$pkg" && ui_ok "$pkg" || ui_warn "$pkg not available, skipped"; fi
+    done < <(rows "$p")
+    ui_info "see what you got: $ARDAOS_CMD pack show $p" ;;
+  *) ui_fail "usage: $ARDAOS_CMD pack [list|show <pack>|install <pack>]"; exit 1 ;;
+esac

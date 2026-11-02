@@ -49,6 +49,7 @@ It's a **live** system: changes are lost when you reboot. That's fine for testin
 | `arda update` | system + tools update |
 | `arda doctor` | checks that everything works |
 | `arda power` | shutdown / reboot / sleep / log out |
+| `arda pack` | extra tool packs, e.g. `arda pack install hacker` |
 
 Shortcuts: `go` `web` `music` `files` `lg` `sys` `wifi` `vol` `cheat` `home`
 
