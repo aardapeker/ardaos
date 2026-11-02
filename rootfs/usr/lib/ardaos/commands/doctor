@@ -11,8 +11,9 @@ check() {  # check "label" command...
 ui_title "${DISTRO_NAME:-ArdaOS} doctor"
 
 echo "  tools"
-tools="fish starship eza bat zoxide fd rg fzf yazi lazygit btop nvim gum fastfetch atuin zellij"
-is_termux || tools="sway kitty $tools spotify_player firefox code podman node java"
+tools="fish starship eza bat zoxide fd rg fzf yazi lazygit nvim gum fastfetch atuin zellij"
+if is_termux; then tools="$tools btm"
+else tools="sway kitty btop $tools spotify_player firefox code podman node java"; fi
 for c in $tools; do
   check "$c" has "$c"
 done

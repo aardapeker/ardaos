@@ -37,7 +37,10 @@ alias web 'arda go web'
 alias music spotify_player
 alias files yazi
 alias lg lazygit
-alias sys btop
+# system monitor: btop on the desktop, bottom/htop in Termux (no btop package there)
+for m in btop btm htop
+    if command -q $m; alias sys $m; break; end
+end
 alias wifi nmtui
 alias vol pulsemixer
 alias cheat tldr
