@@ -17,7 +17,8 @@ source "$ROOTFS/etc/ardaos/identity.conf"
 
 # --- 1. packages (one by one, so one missing package doesn't stop the rest) ---
 say "Upgrading Termux first (mixing old and new packages breaks things)…"
-pkg upgrade -y
+# fresh Termux: take the new config files instead of asking Y/N for each one
+pkg upgrade -y -o Dpkg::Options::="--force-confnew"
 
 say "Installing the terminal stack…"
 for p in fish starship eza bat zoxide fd ripgrep fzf yazi lazygit btop neovim gum \
