@@ -66,6 +66,12 @@ ui_confirm() {
   fi
 }
 
+ui_spin_out() {  # like ui_spin, but prints the command's output (for capturing it)
+  local title=$1; shift
+  if has gum; then gum spin --spinner dot --show-output --title " $title" -- "$@"
+  else "$@"; fi
+}
+
 ui_spin() {  # ui_spin "title" command args...
   local title=$1; shift
   if has gum; then gum spin --spinner dot --show-error --title " $title" -- "$@"

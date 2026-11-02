@@ -19,7 +19,7 @@ function fish_greeting
         end
     end
     set_color $fish_color_autosuggestion
-    echo "  go · web · music · files · lg · sys · arda help"
+    echo "  ai · go · files · lg · sys · arda help"
     set_color normal
 end
 
@@ -53,3 +53,7 @@ alias wifi nmtui
 alias vol pulsemixer
 alias cheat tldr
 alias home 'swaymsg workspace 1 >/dev/null'
+
+# AI helper: ai find big files  (or: ? find big files)
+alias ai 'arda ask'
+abbr -a -- '?' 'arda ask' 2>/dev/null

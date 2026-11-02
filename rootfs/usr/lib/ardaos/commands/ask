@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# desc: ask AI for a command — Claude, Gemini or any OpenAI-compatible API (ai … / ? …)
+#   arda ask setup     → pick a provider, paste its key, test it (keys are kept per provider)
+#   arda ask status    → which AI is active
+#   arda ask <text>    → get a command, then Run / Edit / Copy / Cancel
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/ardaos/ai.conf"   # chmod 600, keys inside
+
+# --- adapters: one per provider (same idea as Lifelog — adding one = one more entry) ---
+# id | label | default model (fast + cheap, it only writes one command)
+PROVIDERS=(
+  "anthropic|Claude|claude-haiku-5-5"
+  "gemini|Gemini|gemini-3.5-flash-lite"
+  "openai|OpenAI-compatible (Groq, OpenRouter, Ollama…)|"
+)
+field() { local p; for p in "${PROVIDERS[@]}"; do [[ ${p%%|*} == "$1" ]] && { cut -d'|' -f"$2" <<< "$p"; return; }; done; }
+
+call_anthropic() {  # system question key model
+  jq -n --arg m "$4" --arg s "$1" --arg q "$2" \
+    '{model:$m, max_tokens:400, system:$s, messages:[{role:"user", content:$q}]}' |
+  curl -sS https://api.anthropic.com/v1/messages -H "x-api-key: $3" \
+    -H "anthropic-version: 2023-06-01" -H "content-type: application/json" -d @- |
+  jq -r '.content[0].text // ("error: " + (.error.message // "unknown"))'
+}
+call_gemini() {
+  jq -n --arg s "$1" --arg q "$2" \
+    '{systemInstruction:{parts:[{text:$s}]}, contents:[{role:"user", parts:[{text:$q}]}],
+      generationConfig:{responseMimeType:"application/json"}}' |
+  curl -sS "https://generativelanguage.googleapis.com/v1beta/models/$4:generateContent" \
+    -H "x-goog-api-key: $3" -H "content-type: application/json" -d @- |
+  jq -r '.candidates[0].content.parts[0].text // ("error: " + (.error.message // "unknown"))'
+}
+# shellcheck disable=SC2154  # URL_openai comes from the config file
+call_openai() {
+  jq -n --arg m "$4" --arg s "$1" --arg q "$2" \
+    '{model:$m, messages:[{role:"system", content:$s}, {role:"user", content:$q}]}' |
+  curl -sS "${URL_openai%/}/chat/completions" -H "Authorization: Bearer $3" \
+    -H "content-type: application/json" -d @- |
+  jq -r '.choices[0].message.content // ("error: " + ((.error.message // .error // "unknown") | tostring))'
+}
+
+# --- config (keys per provider, one active provider) ---------------------------
+# shellcheck source=/dev/null
+load()  { if [[ -f $CONF ]]; then source "$CONF"; fi; }
+var()   { local n="$1_$2"; printf '%s' "${!n:-}"; }      # var KEY gemini → $KEY_gemini
+conf_set() {
+  mkdir -p "$(dirname "$CONF")"; ( umask 077; touch "$CONF" ); chmod 600 "$CONF"
+  sed -i "/^$1=/d" "$CONF"; printf '%s=%q\n' "$1" "$2" >> "$CONF"
+  printf -v "$1" '%s' "$2"
+}
+input() {  # input "placeholder" [default] [secret] [header] [prompt]
+  if has gum; then
+    gum input --placeholder "$1" --value "${2:-}" ${3:+--password} --width 60 \
+      --header "${4:-}" --prompt "${5:-❯ }" \
+      --header.foreground "$ARDAOS_ACCENT" --prompt.foreground "$ARDAOS_ACCENT" \
+      --cursor.foreground "$ARDAOS_ACCENT"
+  elif [[ -n ${3:-} ]]; then local v; read -rsp "$1: " v; echo >&2; echo "$v"
+  else local v; read -rei "${2:-}" -p "$1: " v; echo "$v"; fi
+}
+
+system_prompt() {
+  local where="ArdaOS (Fedora-based Linux)"
+  is_termux && where="Termux on Android (no root; use pkg, not apt/dnf; \$PREFIX is the root)"
+  cat <<EOF
+You are the command helper inside $where. The user's shell is fish, but your command will be run with bash.
+Current directory: $PWD
+Reply with ONLY a JSON object, no code fences: {"command": "...", "explain": "..."}
+- "command": one bash command line that does what the user asks. Prefer safe, read-only commands.
+  Use "" if the user asked a question that is not a command request.
+- "explain": one short sentence explaining it (or the answer, if command is "").
+EOF
+}
+call() {  # call provider question → raw model text
+  "call_$1" "$(system_prompt)" "$2" "$(var KEY "$1")" "$(var MODEL "$1")"
+}
+# the spinner runs a new process, so it calls this script again: arda ask _call <provider> <question>
+spin_call() { ui_spin_out "$1" "$0" _call "$2" "$3" 2>&1 || true; }
+
+# --- setup / status --------------------------------------------------------------
+setup() {
+  load
+  if has gum; then
+    gum style --border rounded --padding "1 3" --margin "1 0" --border-foreground "$ARDAOS_ACCENT" \
+      "$(gum style --bold "🤖  AI setup")" "" \
+      "Pick a provider, paste its key, done." \
+      "$(gum style --faint "Keys stay on this device ($CONF, only you can read it).")"
+  else ui_title "AI setup"; fi
+  local labels=() p id key model
+  for p in "${PROVIDERS[@]}"; do labels+=("$(cut -d'|' -f2 <<< "$p")"); done
+  local pick; pick=$(ui_choose "step 1/3 · which AI?" "${labels[@]}") || exit 0
+  for p in "${PROVIDERS[@]}"; do [[ $(cut -d'|' -f2 <<< "$p") == "$pick" ]] && id=${p%%|*}; done
+
+  case $id in
+    anthropic) ui_info "key: console.anthropic.com → API keys (starts with sk-ant-)" ;;
+    gemini)    ui_info "key: aistudio.google.com → Get API key (your Radar/Lifelog project works)" ;;
+    openai)    conf_set URL_openai "$(input "https://api.groq.com/openai/v1" "$(var URL openai)" "" "step 1/3 · base URL" "🌐 ")" ;;
+  esac
+
+  key=$(var KEY "$id")
+  if [[ -n $key ]] && ui_confirm "Keep the saved $pick key (…${key: -4})?"; then :
+  else key=$(input "paste it here (hidden)" "" secret "step 2/3 · your $pick API key" "🔑 "); fi
+  [[ -n $key ]] || { ui_fail "no key, nothing changed"; exit 1; }
+  model=$(input "$(field "$id" 3)" "$(var MODEL "$id")" "" "step 3/3 · model (Enter = default)" "🧠 ")
+  [[ -n $model ]] || model=$(field "$id" 3)
+  [[ -n $model ]] || { ui_fail "this provider needs a model name"; exit 1; }
+
+  conf_set "KEY_$id" "$key"; conf_set "MODEL_$id" "$model"
+  local out; out=$(spin_call "testing $pick" "$id" 'Reply with {"command":"","explain":"hi"}')
+  if ! jq -e . >/dev/null 2>&1 <<< "$(sed -e 's/^```[a-z]*//' -e 's/```$//' <<< "$out")"; then
+    ui_fail "${out:-no answer}"; ui_info "key + model saved anyway — fix and run setup again"; exit 1
+  fi
+  conf_set AI_PROVIDER "$id"
+  ui_ok "$pick answers! Active now · $model"
+  ui_info "try: ai find files bigger than 100MB"
+}
+
+status() {
+  load
+  ui_title "AI"
+  local p id
+  for p in "${PROVIDERS[@]}"; do
+    id=${p%%|*}
+    local mark="  " key; key=$(var KEY "$id")
+    [[ $id == "${AI_PROVIDER:-}" ]] && mark="▸ "
+    printf '  %s\e[1m%-10s\e[0m %-24s %s\n' "$mark" "$(field "$id" 2 | cut -d' ' -f1)" \
+      "$(var MODEL "$id")" "$([[ -n $key ]] && echo "key …${key: -4}" || echo "no key")"
+  done
+  echo; ui_info "switch: $ARDAOS_CMD ask setup"
+}
+
+# --- asking -------------------------------------------------------------------------
+looks_dangerous() {
+  grep -qE '(^|[;&| ])(sudo|rm|dd|mkfs|shred|chmod|chown|mv|kill|pkill|reboot|poweroff)( |$)|>[^&]|:\(\)' <<< "$1"
+}
+copy() {
+  if has termux-clipboard-set; then termux-clipboard-set <<< "$1"
+  elif has wl-copy; then wl-copy <<< "$1"
+  else echo "$1"; ui_info "(no clipboard tool — select it above)"; return; fi
+  ui_ok "copied"
+}
+
+ask() {
+  load
+  if [[ -z ${AI_PROVIDER:-} ]]; then ui_warn "AI isn't set up yet"; setup; load; fi
+  local q="$*" raw cmd explain
+  [[ -n $q ]] || q=$(input "what do you want to do?")
+  [[ -n $q ]] || exit 0
+
+  raw=$(spin_call "thinking ($(field "$AI_PROVIDER" 2 | cut -d' ' -f1))" "$AI_PROVIDER" "$q")
+  raw=$(sed -e 's/^```[a-z]*//' -e 's/```$//' <<< "$raw")      # tolerate ```json fences
+
+  if ! cmd=$(jq -er '.command' <<< "$raw" 2>/dev/null); then
+    echo; echo "$raw"; exit 0                                  # error or plain text → just show it
+  fi
+  explain=$(jq -r '.explain // ""' <<< "$raw")
+
+  echo
+  [[ -n $explain ]] && ui_info "$explain"
+  [[ -z $cmd ]] && exit 0
+  printf '\n  \e[1m❯ %s\e[0m\n\n' "$cmd"
+  looks_dangerous "$cmd" && ui_warn "this one changes or deletes things — read it carefully"
+
+  case $(ui_choose "run it?" "Run" "Edit" "Copy" "Cancel") in
+    Run)  bash -c "$cmd" ;;
+    Edit) read -rei "$cmd" -p "  ❯ " cmd && bash -c "$cmd" ;;
+    Copy) copy "$cmd" ;;
+    *)    ui_info "bruh, ok. nothing ran." ;;
+  esac
+}
+
+case "${1:-}" in
+  _call)  load; call "$2" "$3" ;;
+  setup)  setup ;;
+  status) status ;;
+  *)      ask "$@" ;;
+esac

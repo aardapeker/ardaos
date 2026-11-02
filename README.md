@@ -42,6 +42,7 @@ It's a **live** system: changes are lost when you reboot. That's fine for testin
 
 | | |
 |---|---|
+| `ai <what you want>` | AI writes the command → Run / Edit / Copy. Claude, Gemini or any OpenAI-compatible API (`arda ask setup`) |
 | `arda help` | everything ArdaOS can do (`bruh help` works too 😏) |
 | `arda theme` | switch theme everywhere, **live preview** while you scroll |
 | `arda font` | JetBrains Mono · Maple Mono · Iosevka |
@@ -51,7 +52,7 @@ It's a **live** system: changes are lost when you reboot. That's fine for testin
 | `arda power` | shutdown / reboot / sleep / log out |
 | `arda pack` | extra tool packs: `hacker` (network tools), `dev` (Node, TypeScript, Java 21, Maven, gh) |
 
-Shortcuts: `go` `web` `music` `files` `lg` `sys` `wifi` `vol` `cheat` `home`
+Shortcuts: `ai` `go` `web` `music` `files` `lg` `sys` `wifi` `vol` `cheat` `home`
 
 Keys: `Super+Space` launcher · `Super+Esc` home terminal · `Super+Tab` next app ·
 `Super+Q` close · `Super+F` fullscreen · `Super+Shift+E` power menu
@@ -103,6 +104,6 @@ That's normal for a v1. Send the last ~50 lines of `/var/tmp/ardaos-build/lmc.lo
 
 ## Roadmap
 
-- **v2:** the `?` AI command helper, install-to-disk, VS Code theme sync, Ghostty shaders
+- **v2:** install-to-disk, VS Code theme sync, Ghostty shaders
 - **later:** LFS-based engine, same look and commands
 - Chrome: still on trial ⚖️
