@@ -23,8 +23,8 @@ pkg upgrade -y -o Dpkg::Options::="--force-confnew"
 say "Installing the terminal stack…"
 for p in fish starship eza bat zoxide fd ripgrep fzf yazi lazygit btop neovim gum \
          fastfetch tealdeer zellij atuin git jq curl unzip procps termux-tools; do
-  printf '   %-12s' "$p"
-  if pkg install -y "$p" >/dev/null 2>&1; then echo "✓"; else echo "✗ (skipping)"; fi
+  printf '\n\e[1m── %s ──\e[0m\n' "$p"   # visible output: big downloads shouldn't look frozen
+  pkg install -y -o Dpkg::Options::="--force-confnew" "$p" || warn "couldn't install $p (skipping)"
 done
 
 # --- 2. the ArdaOS layer: same files as the ISO, just under $PREFIX ----------
