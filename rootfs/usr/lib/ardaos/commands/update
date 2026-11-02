@@ -5,8 +5,15 @@ source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
 
 ui_title "updating ${DISTRO_NAME:-ArdaOS}"
 if is_termux; then
-  ui_spin "packages (pkg)" pkg upgrade -y && ui_ok "packages"
-  ui_spin "fonts (GitHub)" env ARDAOS_KINDS=font "$ARDAOS_LIB/tools.sh" && ui_ok "fonts"
+  repo=$(cat "$ARDAOS_ETC/repo" 2>/dev/null || echo "$HOME/ardaos")
+  if [[ -d $repo/.git ]]; then
+    ui_spin "ArdaOS (git pull)" git -C "$repo" pull --ff-only && ui_ok "ArdaOS"
+    "$repo/termux-install.sh"                      # re-copies commands, configs, aliases
+    ui_info "restart Termux (or run: exec fish) to load the new aliases"
+  else
+    ui_spin "packages (pkg)" pkg upgrade -y && ui_ok "packages"
+    ui_spin "fonts (GitHub)" env ARDAOS_KINDS=font "$ARDAOS_LIB/tools.sh" && ui_ok "fonts"
+  fi
 else
   sudo -v
   ui_spin "system packages (dnf)" sudo dnf upgrade --refresh -y && ui_ok "system packages"

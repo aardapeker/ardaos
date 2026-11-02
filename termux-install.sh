@@ -39,6 +39,7 @@ cp -r "$ROOTFS/usr/share/ardaos" "$PREFIX/share/ardaos"
 chmod 755 "$PREFIX"/lib/ardaos/*.sh "$PREFIX"/lib/ardaos/commands/*
 mkdir -p "$PREFIX/etc/ardaos" "$PREFIX/etc/fish/conf.d"
 cp "$ROOTFS/etc/ardaos/identity.conf" "$PREFIX/etc/ardaos/"
+echo "$REPO" > "$PREFIX/etc/ardaos/repo"   # so `arda update` knows where to git pull
 cp "$ROOTFS/etc/fish/conf.d/ardaos.fish" "$PREFIX/etc/fish/conf.d/"
 
 # your personal configs: only added if you don't have them yet
