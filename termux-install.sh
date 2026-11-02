@@ -56,6 +56,7 @@ chsh -s fish || warn "couldn't switch the shell to fish"
 arda theme apply "$DEFAULT_THEME"
 arda font apply "$DEFAULT_FONT" || true
 tldr --update >/dev/null 2>&1 || true
+touch "$HOME/.hushlogin"   # hide Termux's welcome text — Şemistan is the welcome now
 
 say "Done! Close Termux completely and open it again. Şemistan is waiting 🐈"
 echo "   Try: arda theme · arda font · arda doctor"

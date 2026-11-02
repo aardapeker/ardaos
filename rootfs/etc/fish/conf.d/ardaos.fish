@@ -10,7 +10,14 @@ status is-interactive; or return
 
 # home screen: Şemistan + hints
 function fish_greeting
-    command -q fastfetch; and fastfetch
+    if command -q fastfetch
+        # narrow phone screen: Şemistan on top, info below (no ugly line wrapping)
+        if set -q TERMUX_VERSION; or test $COLUMNS -lt 70
+            fastfetch --logo-position top
+        else
+            fastfetch
+        end
+    end
     set_color $fish_color_autosuggestion
     echo "  go · web · music · files · lg · sys · arda help"
     set_color normal
