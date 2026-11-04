@@ -51,6 +51,8 @@ It's a **live** system: changes are lost when you reboot. That's fine for testin
 | `arda lock` | lock screen with Şemistan (laptop, Super + L, auto after 10 min) |
 | `arda buttons` | phone home-screen buttons (Termux:Widget) |
 | `arda help` | everything ArdaOS can do (`bruh help` works too 😏) |
+| `arda setup` | setup wizard: theme, font, packs, AI, extras (runs once on first start) |
+| `arda pack install all` | install every tool pack (short: `arda install all`) |
 | `arda theme` | switch theme everywhere, **live preview** while you scroll |
 | `arda font` | JetBrains Mono · Maple Mono · Iosevka |
 | `arda go` | app launcher (`arda go web` opens one directly) |

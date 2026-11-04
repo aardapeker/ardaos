@@ -8,8 +8,9 @@ end
 
 status is-interactive; or return
 
-# home screen: Şemistan + hints
+# home screen: Şemistan + hints (and the setup wizard, once, on the very first start)
 function fish_greeting
+    arda setup --first-run
     if command -q fastfetch
         # narrow phone screen: Şemistan on top, info below (no ugly line wrapping)
         if set -q TERMUX_VERSION; or test $COLUMNS -lt 70

@@ -29,6 +29,8 @@ If you remember only five commands, make it these.
 
 `bruh` works anywhere you type `arda` (`bruh help`, `bruh update`).
 
+**First start:** a setup wizard asks about theme, font, tool packs, AI and phone or laptop extras. It runs once by itself; `arda setup` brings it back any time.
+
 ## AI helper
 
 Type what you want in plain English (or Turkish). The AI knows your folder and whether you are on the phone or the laptop.
@@ -96,6 +98,8 @@ Every system command lives under `arda`.
 | `arda pack list` | Show the optional tool packs |
 | `arda pack show hacker` | Show what a pack contains (installs nothing) |
 | `arda pack install hacker` | Install a pack: `hacker`, `network`, `security` or `dev` |
+| `arda pack install all` | Install every pack (short form: `arda install all`) |
+| `arda setup` | The setup wizard again: theme, font, packs, AI, phone/laptop extras |
 | `arda share <file>` | Send a file or folder over Wi-Fi (see Share files) |
 | `arda share receive` | Get files from another device over Wi-Fi |
 | `arda status` | Battery, Wi-Fi, IP, storage and memory |
@@ -205,7 +209,7 @@ Brand guesses come from the web page, the server header and typical ports: 8000 
 
 ## Tool packs
 
-Optional extras. Install with `arda pack install <name>`.
+Optional extras. Install with `arda pack install <name>`, or everything at once with `arda pack install all`.
 
 ### hacker
 

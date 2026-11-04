@@ -61,5 +61,5 @@ tldr --update >/dev/null 2>&1 || true
 arda buttons >/dev/null || true   # home-screen buttons (shows up once Termux:Widget is installed)
 touch "$HOME/.hushlogin"   # hide Termux's welcome text — Şemistan is the welcome now
 
-say "Done! Close Termux completely and open it again. Şemistan is waiting 🐈"
+say "Done! Close Termux completely and open it again. The setup wizard starts, then Şemistan 🐈"
 echo "   Try: arda theme · arda font · arda doctor"

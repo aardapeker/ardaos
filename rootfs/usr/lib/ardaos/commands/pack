@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# desc: extra tool packs (arda pack list · arda pack show hacker · arda pack install hacker)
+# desc: extra tool packs (arda pack list · show hacker · install hacker · install all)
 set -euo pipefail
 source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
 
@@ -31,7 +31,15 @@ case "${1:-list}" in
       [[ $pkg == - ]] && printf '  \e[2m%-22s %s\e[0m\n' "(n/a here)" "$what" || printf '  \e[1m%-22s\e[0m %s\n' "${pkg#npm:}" "$what"
     done < <(rows "$p") ;;
   install)
-    p=${2:?usage: $ARDAOS_CMD pack install <pack>}
+    [[ -n ${2:-} ]] || { ui_fail "usage: $ARDAOS_CMD pack install <pack>… | all"; exit 1; }
+    if [[ $2 == all ]]; then mapfile -t names < <(for f in "$PACKS"/*.pack; do basename "$f" .pack; done)
+    else names=("${@:2}"); fi
+    if ((${#names[@]} > 1)); then                    # several packs → one after another
+      is_termux || sudo -v
+      for n in "${names[@]}"; do "$0" install "$n" || ui_warn "$n pack had problems"; done
+      ui_ok "done: ${names[*]}"; exit 0
+    fi
+    p=${names[0]}; [[ -f $PACKS/$p.pack ]] || { ui_fail "no pack '$p' — try: $ARDAOS_CMD pack list"; exit 1; }
     ui_title "installing the $p pack"
     is_termux || sudo -v
     sudo_=(); is_termux || sudo_=(sudo)
@@ -49,5 +57,5 @@ case "${1:-list}" in
       if ui_spin "$name" "${cmd[@]}"; then ui_ok "$name"; else ui_warn "$name not available, skipped"; fi
     done < <(rows "$p")
     ui_info "see what you got: $ARDAOS_CMD pack show $p" ;;
-  *) ui_fail "usage: $ARDAOS_CMD pack [list|show <pack>|install <pack>]"; exit 1 ;;
+  *) ui_fail "usage: $ARDAOS_CMD pack [list|show <pack>|install <pack>…|install all]"; exit 1 ;;
 esac

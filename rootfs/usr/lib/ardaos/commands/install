@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# desc: install tool packs — arda install all · arda install dev hacker (same as arda pack install)
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+[[ $# -gt 0 ]] || { ui_info "usage: $ARDAOS_CMD install all · $ARDAOS_CMD install <pack>…"; exec "$ARDAOS_LIB/commands/pack" list; }
+exec "$ARDAOS_LIB/commands/pack" install "$@"
