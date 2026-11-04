@@ -40,6 +40,8 @@ It's a **live** system: changes are lost when you reboot. That's fine for testin
 
 ## Commands
 
+📋 **Full list with explanations and examples: [CHEATSHEET.md](CHEATSHEET.md)**
+
 | | |
 |---|---|
 | `ai <what you want>` | AI writes the command → Run / Edit / Copy. Claude, Gemini or any OpenAI-compatible API (`arda ask setup`) |
@@ -85,6 +87,7 @@ No GUI apps here, just the terminal stack. Run it again any time to update.
 ```
 build.sh                 builds the ISO (runs on your Fedora)
 termux-install.sh        Pocket Edition for Android (Termux)
+CHEATSHEET.md            every command, explained
 kickstart/ardaos.ks      package list + build steps
 rootfs/                  copied as-is into the image
   etc/ardaos/identity.conf   ← the name lives ONLY here (rename = edit + rebuild)
