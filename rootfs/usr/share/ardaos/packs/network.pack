@@ -1,5 +1,6 @@
-# desc: camera & network field kit — test RTSP streams, subnets, speed, links
+# desc: camera & network field kit — arda cams, RTSP streams, subnets, speed (your own/authorized networks)
 # termux package | fedora package | what it's for          ("-" = not available there)
+nmap            | nmap          | scanner that arda cams uses (also in the hacker pack)
 ffmpeg          | ffmpeg-free   | ffprobe — check an RTSP stream: resolution, codec, FPS, bitrate
 mpv             | mpv           | watch a camera stream (phone: mpv --vo=tct draws it in the terminal)
 ipcalc          | ipcalc        | subnet calculator: ipcalc 192.168.1.0/24

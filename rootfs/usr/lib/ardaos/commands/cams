@@ -23,7 +23,7 @@ detect_subnet() {
   [[ -n $ip ]] && echo "${ip%.*}.0/24"
 }
 
-has nmap || { ui_fail "nmap is missing — install it: $ARDAOS_CMD pack install hacker"; exit 1; }
+has nmap || { ui_fail "nmap is missing — install it: $ARDAOS_CMD pack install network"; exit 1; }
 [[ -n $subnet ]] || subnet=$(detect_subnet) || true
 [[ -n $subnet ]] || { ui_fail "couldn't find your network — give it: $ARDAOS_CMD cams 192.168.1.0/24"; exit 1; }
 

@@ -8,6 +8,7 @@ Every ArdaOS command with what it does. Works on the laptop and in the Pocket Ed
 - [Daily shortcuts](#daily-shortcuts)
 - [Silent upgrades](#silent-upgrades)
 - [Tools inside](#tools-inside)
+- [Camera finder](#camera-finder)
 - [Tool packs](#tool-packs)
 - [Laptop only](#laptop-only)
 - [Phone tips and fixes](#phone-tips-and-fixes)
@@ -63,8 +64,8 @@ Every system command lives under `arda`.
 | `arda go web` | Open one app directly by its short name |
 | `arda pack list` | Show the optional tool packs |
 | `arda pack show hacker` | Show what a pack contains (installs nothing) |
-| `arda pack install hacker` | Install a pack: `hacker`, `dev` or `network` |
-| `arda cams` | Find IP cameras & NVRs on a network (needs the `network` pack) |
+| `arda pack install hacker` | Install a pack: `hacker`, `network`, `security` or `dev` |
+| `arda cams` | Find IP cameras and NVRs on your network (see Camera finder) |
 | `arda update` | Phone: git pull + reinstall. Laptop: dnf upgrade + GitHub tools |
 | `arda doctor` | Green or red check for every tool, font and system part |
 | `arda power` | Shutdown, reboot, sleep or log out (laptop) |
@@ -117,6 +118,25 @@ The programs underneath, with the one key you need to get out of each.
 | tldr | Short examples for any command | `cheat git` | |
 | fastfetch | The Şemistan home screen | `fastfetch` | |
 
+## Camera finder
+
+`arda cams` scans your network for IP cameras and NVRs. Install the `network` pack first. Only scan networks you own or are working on.
+
+| Command | What it does |
+| --- | --- |
+| `arda cams` | Scans your current network (it finds the /24 by itself) |
+| `arda cams 10.0.0.0/24` | Scans a network you choose |
+| `arda cams --mac` | Also shows the vendor from each MAC address (laptop, asks for sudo) |
+
+For every device it shows the brand (Hikvision, Dahua, XMEye, Axis, Uniview, Reolink, or a guess with `?`), and whether RTSP (554), the web page and ONVIF answer. At the end it prints a ready RTSP URL for the first camera, with the commands to check and watch it:
+
+```bash
+ffprobe -rtsp_transport tcp "rtsp://USER:PASS@192.168.1.64:554/Streaming/Channels/101"
+mpv "rtsp://USER:PASS@192.168.1.64:554/Streaming/Channels/101"      # phone: mpv --vo=tct …
+```
+
+Brand guesses come from the web page, the server header and typical ports: 8000 = Hikvision, 37777 = Dahua, 34567 = XMEye.
+
 ## Tool packs
 
 Optional extras. Install with `arda pack install <name>`.
@@ -136,7 +156,16 @@ Network and security tools. Only use them on networks you own or are allowed to 
 | `http` | Friendly HTTP requests | `http GET httpbin.org/get` |
 | `cmatrix` | Matrix rain | `cmatrix -C blue` |
 
-Laptop only: `mtr` (live traceroute), `tcpdump` and `tshark` (packet capture, need root).
+Laptop only:
+
+| Command | What it does | Example |
+| --- | --- | --- |
+| `mtr` | Live traceroute with packet loss per hop | `mtr 8.8.8.8` |
+| `arp-scan` | Every device on the LAN with its vendor | `sudo arp-scan -l` |
+| `tcpdump` | Captures packets | `sudo tcpdump -i any port 554` |
+| `tshark` | Wireshark in the terminal | `sudo tshark -i any -f "port 554"` |
+| `termshark` | Wireshark with a real TUI | `sudo termshark -i any` |
+| `bandwhich` | Which app or IP uses your bandwidth, live | `sudo bandwhich` |
 
 ### dev
 
@@ -156,19 +185,30 @@ React on the phone: `npm run dev -- --host`, then open `localhost:5173` in the p
 
 ### network
 
-Network and camera toolkit. Install, then `arda cams` finds cameras for you.
+Camera and network field kit. Includes `nmap`, so `arda cams` works.
 
 | Command | What it does | Example |
 | --- | --- | --- |
-| `arda cams` | Scan a network for cameras & NVRs, show likely brand and open ports | `arda cams 192.168.1.0/24` |
-| `ffprobe` | Inspect an RTSP stream: codec, resolution, fps, bitrate | `ffprobe rtsp://user:pass@IP:554/` |
-| `mpv` | Watch a live camera stream (laptop) | `mpv rtsp://user:pass@IP:554/` |
+| `ffprobe` | Checks an RTSP stream: resolution, codec, FPS, bitrate | `ffprobe -rtsp_transport tcp "rtsp://…"` |
+| `mpv` | Watches a stream (phone: `--vo=tct` draws it in the terminal) | `mpv "rtsp://…"` |
 | `ipcalc` | Subnet calculator | `ipcalc 192.168.1.0/24` |
-| `fping` | Ping many IPs at once | `fping -a -g 192.168.1.0/24` |
-| `age` | Simple file encryption | `age -p secret.txt > secret.age` |
-| `wg` | Your own VPN (WireGuard) | |
+| `fping` | Pings a whole range at once | `fping -a -g 192.168.1.0/24` |
+| `speedtest` | Internet speed test | `speedtest` |
+| `iperf3` | Real speed between two devices | `iperf3 -s` on one, `iperf3 -c <ip>` on the other |
 
-Laptop only: `arp-scan` (devices + vendor from MAC), `termshark` (Wireshark TUI), `bandwhich` (live bandwidth per app), `iperf3` (link speed).
+### security
+
+Protect yourself.
+
+| Command | What it does | Example |
+| --- | --- | --- |
+| `lynis` | Audits this system and suggests fixes (laptop) | `sudo lynis audit system` |
+| `wg` / `wg-quick` | WireGuard VPN | `sudo wg-quick up wg0` |
+| `age` | Simple file encryption | `age -p secret.txt > secret.txt.age` |
+| `gpg` | Classic encryption and signing | `gpg -c file.txt` |
+| `pass` | Password manager in the terminal | `pass insert email/gmail` |
+
+Some phone packages may not exist in Termux; the installer skips them and says so.
 
 ## Laptop only
 
