@@ -63,7 +63,8 @@ Every system command lives under `arda`.
 | `arda go web` | Open one app directly by its short name |
 | `arda pack list` | Show the optional tool packs |
 | `arda pack show hacker` | Show what a pack contains (installs nothing) |
-| `arda pack install hacker` | Install a pack: `hacker` or `dev` |
+| `arda pack install hacker` | Install a pack: `hacker`, `dev` or `network` |
+| `arda cams` | Find IP cameras & NVRs on a network (needs the `network` pack) |
 | `arda update` | Phone: git pull + reinstall. Laptop: dnf upgrade + GitHub tools |
 | `arda doctor` | Green or red check for every tool, font and system part |
 | `arda power` | Shutdown, reboot, sleep or log out (laptop) |
@@ -152,6 +153,22 @@ TypeScript and Java kit. Java is the big download, so use Wi-Fi.
 | `gh` | GitHub CLI | `gh auth login` |
 
 React on the phone: `npm run dev -- --host`, then open `localhost:5173` in the phone's browser.
+
+### network
+
+Network and camera toolkit. Install, then `arda cams` finds cameras for you.
+
+| Command | What it does | Example |
+| --- | --- | --- |
+| `arda cams` | Scan a network for cameras & NVRs, show likely brand and open ports | `arda cams 192.168.1.0/24` |
+| `ffprobe` | Inspect an RTSP stream: codec, resolution, fps, bitrate | `ffprobe rtsp://user:pass@IP:554/` |
+| `mpv` | Watch a live camera stream (laptop) | `mpv rtsp://user:pass@IP:554/` |
+| `ipcalc` | Subnet calculator | `ipcalc 192.168.1.0/24` |
+| `fping` | Ping many IPs at once | `fping -a -g 192.168.1.0/24` |
+| `age` | Simple file encryption | `age -p secret.txt > secret.age` |
+| `wg` | Your own VPN (WireGuard) | |
+
+Laptop only: `arp-scan` (devices + vendor from MAC), `termshark` (Wireshark TUI), `bandwhich` (live bandwidth per app), `iperf3` (link speed).
 
 ## Laptop only
 

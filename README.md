@@ -52,7 +52,8 @@ It's a **live** system: changes are lost when you reboot. That's fine for testin
 | `arda update` | system + tools update |
 | `arda doctor` | checks that everything works |
 | `arda power` | shutdown / reboot / sleep / log out |
-| `arda pack` | extra tool packs: `hacker` (network tools), `dev` (Node, TypeScript, Java 21, Maven, gh) |
+| `arda pack` | extra tool packs: `hacker`, `dev`, `network` (cameras + `arda cams`) |
+| `arda cams` | find IP cameras & NVRs on a network (needs the `network` pack) |
 
 Shortcuts: `ai` `go` `web` `music` `files` `lg` `sys` `wifi` `vol` `cheat` `home`
 

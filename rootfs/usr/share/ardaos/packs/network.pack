@@ -1,0 +1,13 @@
+# desc: network & camera toolkit — scan, watch streams, measure links (use on your own/authorized networks)
+# termux package | fedora package | what it's for   ("-" = not available there)
+nmap            | nmap          | scan devices + ports (ONVIF/RTSP camera discovery)
+ffmpeg          | ffmpeg        | ffprobe: inspect an RTSP stream (codec, fps, bitrate)
+mpv             | mpv           | watch a live camera stream: mpv rtsp://...
+ipcalc          | ipcalc        | subnet calculator: ipcalc 192.168.1.0/24
+fping           | fping         | ping many IPs at once, show which are alive
+-               | arp-scan      | list LAN devices + vendor from MAC (laptop, needs root)
+-               | termshark     | Wireshark with a full TUI (laptop, needs root)
+-               | bandwhich     | live: which app/IP uses your bandwidth (laptop)
+-               | iperf3        | measure real speed between two devices
+age             | age           | simple modern file encryption
+wireguard-tools | wireguard-tools | your own VPN (reach your home server)
