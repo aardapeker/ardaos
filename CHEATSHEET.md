@@ -66,6 +66,7 @@ Every system command lives under `arda`.
 | `arda pack show hacker` | Show what a pack contains (installs nothing) |
 | `arda pack install hacker` | Install a pack: `hacker`, `network`, `security` or `dev` |
 | `arda cams` | Find IP cameras and NVRs on your network (see Camera finder) |
+| `arda audit <ip>` | Safe security checkup of one device you own (see Camera finder) |
 | `arda update` | Phone: git pull + reinstall. Laptop: dnf upgrade + GitHub tools |
 | `arda doctor` | Green or red check for every tool, font and system part |
 | `arda power` | Shutdown, reboot, sleep or log out (laptop) |
@@ -136,6 +137,19 @@ mpv "rtsp://USER:PASS@192.168.1.64:554/Streaming/Channels/101"      # phone: mpv
 ```
 
 Brand guesses come from the web page, the server header and typical ports: 8000 = Hikvision, 37777 = Dahua, 34567 = XMEye.
+
+### Security checkup
+
+`arda audit 192.168.1.64` checks one device you own and lists what to fix. It is read-only: it never logs in or changes anything.
+
+| It checks | Why it matters |
+| --- | --- |
+| All open TCP ports | Every open port is a door; close the ones you don't use |
+| Telnet (23), FTP (21), port 2323 | Old, unencrypted services that leak passwords |
+| RTSP (554) without a password | Anyone on the network could watch the camera |
+| Weak or old TLS on 443/8443 | Outdated encryption on the HTTPS admin page |
+| Admin page on plain HTTP (80) | Your password crosses the network unencrypted |
+| Default passwords (reminder) | The number one way cameras get taken over |
 
 ## Tool packs
 

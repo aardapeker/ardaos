@@ -53,6 +53,7 @@ It's a **live** system: changes are lost when you reboot. That's fine for testin
 | `arda doctor` | checks that everything works |
 | `arda power` | shutdown / reboot / sleep / log out |
 | `arda cams` | find IP cameras & NVRs on your network: brand, RTSP, web, ONVIF (needs the `network` pack) |
+| `arda audit <ip>` | safe, read-only security checkup of one device you own |
 | `arda pack` | extra tool packs: `hacker`, `network` (camera field kit), `security`, `dev` (Node, TypeScript, Java 21, Maven, gh) |
 
 Shortcuts: `ai` `go` `web` `music` `files` `lg` `sys` `wifi` `vol` `cheat` `home`
