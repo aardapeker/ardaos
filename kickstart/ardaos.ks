@@ -64,6 +64,11 @@ xdg-desktop-portal-wlr
 kitty
 foot
 polkit
+swaylock
+swayidle
+mako
+libnotify
+ImageMagick
 
 # --- fonts (JetBrains Mono, Maple Mono, Iosevka come from GitHub in setup) ---
 google-noto-emoji-fonts
@@ -83,6 +88,8 @@ tealdeer
 git
 jq
 curl
+python3
+qrencode
 unzip
 tar
 xz

@@ -7,3 +7,4 @@ sys|System monitor|btop|tui
 wifi|Wi-Fi|nmtui|tui
 vol|Volume|pulsemixer|tui
 term|New terminal|kitty|gui
+lock|Lock screen|arda lock|gui

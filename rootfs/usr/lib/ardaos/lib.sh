@@ -81,6 +81,19 @@ ui_spin() {  # ui_spin "title" command args...
   fi
 }
 
+ui_notify() {  # ui_notify "title" "text" → phone or desktop notification, silent if impossible
+  if has termux-notification; then timeout 3 termux-notification --title "$1" --content "$2" >/dev/null 2>&1 || true
+  elif has notify-send; then notify-send "$1" "$2" 2>/dev/null || true; fi
+}
+
+# --- network -------------------------------------------------------------------
+local_ip() {  # this device's LAN IPv4 (works on Fedora and in Termux)
+  local ip
+  ip=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
+  [[ -n $ip ]] || ip=$(ifconfig 2>/dev/null | awk '/inet /{print $2}' | sed 's/addr://' | grep -v '^127\.' | head -1)
+  [[ -n $ip ]] && echo "$ip"
+}
+
 # --- per-user state (current theme, font) -----------------------------------
 state_get() { [[ -f $ARDAOS_STATE ]] && sed -n "s/^$1=//p" "$ARDAOS_STATE" | tail -1; }
 state_set() {

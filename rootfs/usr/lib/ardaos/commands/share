@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# desc: send files between phone and laptop over Wi-Fi (arda share <file|folder> · arda share receive)
+#   arda share photo.jpg        → anyone on your Wi-Fi with the link (or QR) can download it
+#   arda share ~/projects/app   → a whole folder, as a download page
+#   arda share receive [folder] → an upload page: pick files on the other device, they land here
+#   arda share get <link>       → download a shared file from another ArdaOS device
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+PORT=8765
+
+downloads_dir() {
+  if is_termux; then
+    if [[ -d $HOME/storage/downloads ]]; then echo "$HOME/storage/downloads"
+    else echo "$HOME/downloads"; fi
+  else echo "${XDG_DOWNLOAD_DIR:-$HOME/Downloads}"; fi
+}
+
+free_port() {  # first free port from $PORT up
+  local p=$PORT
+  while (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; do ((p++)); done
+  echo "$p"
+}
+
+show_link() {  # show_link url what
+  echo
+  if has gum; then
+    gum style --border rounded --padding "0 2" --border-foreground "$ARDAOS_ACCENT" \
+      "$(gum style --bold "$2")" "" "$1"
+  else printf '  \e[1m%s\e[0m\n  %s\n' "$2" "$1"; fi
+  if has qrencode; then echo; qrencode -t ANSIUTF8 -m 1 "$1" | sed 's/^/  /'; fi
+  echo
+  ui_info "same Wi-Fi only · Ctrl+C stops sharing"
+}
+
+serve() {  # serve mode target title
+  has python3 || has python || { ui_fail "needs Python — $(is_termux && echo 'pkg install python' || echo 'sudo dnf install python3')"; exit 1; }
+  local py; py=$(command -v python3 || command -v python)
+  local ip port token url
+  ip=$(local_ip) || { ui_fail "no Wi-Fi/LAN address — join a network first"; exit 1; }
+  port=$(free_port)
+  token=$(head -c 6 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  url="http://$ip:$port/$token/"
+  show_link "$url" "$3"
+  local kind name sz from
+  "$py" "$ARDAOS_LIB/share.py" "$1" "$port" "$token" "$2" | while IFS=$'\t' read -r kind name sz from; do
+    case $kind in
+      sent)     ui_ok "sent $name ($sz) → $from" ;;
+      received) ui_ok "received $name ($sz) ← $from"; ui_notify "ArdaOS share" "received $name ($sz)" ;;
+    esac
+  done
+}
+
+case "${1:-}" in
+  ""|-h|--help) sed -n '2,6s/^# *//p' "$0" ;;
+  receive|recv)
+    dest=${2:-$(downloads_dir)}
+    mkdir -p "$dest"
+    is_termux && [[ ! -d $HOME/storage ]] && ui_info "tip: run termux-setup-storage once so files land in the phone's Downloads"
+    ui_title "📥 receiving into $dest"
+    serve receive "$dest" "open this on the other device to send files" ;;
+  get)
+    url=${2:?usage: $ARDAOS_CMD share get <link>}
+    dest=$(downloads_dir); mkdir -p "$dest"
+    ( cd "$dest" && curl -fOJ --progress-bar "$url" ) && ui_ok "saved in $dest" ;;
+  *)
+    target=$1
+    [[ -e $target ]] || { ui_fail "no such file or folder: $target"; exit 1; }
+    target=$(cd "$(dirname "$target")" && pwd)/$(basename "$target")
+    if [[ -d $target ]]; then what="📂 $(basename "$target") — open to download"
+    else what="📄 $(basename "$target") ($(du -h "$target" | cut -f1)) — open to download"; fi
+    ui_title "📤 sharing"
+    serve send "$target" "$what" ;;
+esac

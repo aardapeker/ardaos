@@ -4,6 +4,6 @@ nmap            | nmap          | scanner that arda cams uses (also in the hacke
 ffmpeg          | ffmpeg-free   | ffprobe — check an RTSP stream: resolution, codec, FPS, bitrate
 mpv             | mpv           | watch a camera stream (phone: mpv --vo=tct draws it in the terminal)
 ipcalc          | ipcalc        | subnet calculator: ipcalc 192.168.1.0/24
-fping           | fping         | ping many hosts at once: fping -g 192.168.1.0/24
+-               | fping         | ping many hosts at once: fping -a -g 192.168.1.0/24 (phone: nmap -sn 192.168.1.0/24)
 speedtest-go    | speedtest-cli | internet speed test (type: speedtest)
 iperf3          | iperf3        | real speed between two devices (iperf3 -s on one, -c on the other)

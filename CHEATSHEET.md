@@ -8,9 +8,11 @@ Every ArdaOS command with what it does. Works on the laptop and in the Pocket Ed
 - [Daily shortcuts](#daily-shortcuts)
 - [Silent upgrades](#silent-upgrades)
 - [Tools inside](#tools-inside)
+- [Share files](#share-files)
 - [Camera finder](#camera-finder)
 - [Tool packs](#tool-packs)
 - [Laptop only](#laptop-only)
+- [Phone extras](#phone-extras)
 - [Phone tips and fixes](#phone-tips-and-fixes)
 
 ## Start here
@@ -35,6 +37,9 @@ Type what you want in plain English (or Turkish). The AI knows your folder and w
 | --- | --- |
 | `ai <text>` | Ask for a command, e.g. `ai find the 5 biggest files here` |
 | `? <text>` | Same as `ai` (shortcut) |
+| `ai chat` | A real conversation that remembers what you said, even next time |
+| `ai web <question>` | Searches the web and answers with sources (Claude or Gemini) |
+| `ai explain` | Explains an error and suggests the fix (see below) |
 | `arda ask setup` | Pick Claude, Gemini or an OpenAI-compatible API, paste the key, test it |
 | `arda ask status` | Shows which AI is active and which keys are saved |
 | `arda ask test` | Prints the raw answer from the AI, for debugging |
@@ -47,6 +52,32 @@ After each answer you choose:
 - **Cancel**: nothing happens
 
 Commands that delete or change things (`rm`, `sudo`, `dd`, `mv`) get a warning first. Keys are stored only on your device, in a file only you can read.
+
+### ai chat
+
+Type `ai chat` and talk. It continues your last conversation; type these inside the chat:
+
+| Type | What it does |
+| --- | --- |
+| `/new` | Start a fresh chat (the old one is kept in `~/.config/ardaos/chat/history`) |
+| `/about` | Write what the AI should know about you; it reads this before every answer |
+| `/web <question>` | Search the web inside the chat |
+| `/copy` | Copy the last answer |
+| `/exit` | Leave (Esc or Ctrl+C work too) |
+
+### ai explain
+
+Three ways to give it an error:
+
+| How | Example |
+| --- | --- |
+| Pipe a command into it | `npm run build &\| ai explain` (`&\|` sends errors too) |
+| Type or paste it as text | `ai explain "permission denied: ./build.sh"` |
+| Paste it after running | `ai explain`, paste, press Enter, then Ctrl+D |
+
+You get **What happened**, **Why** and **Fix**, and if one command fixes it: Run / Edit / Copy / Cancel.
+
+`ai web` costs a little per search on your API account (cents). OpenAI-compatible APIs can't search; use Claude or Gemini for it.
 
 ## arda commands
 
@@ -65,6 +96,11 @@ Every system command lives under `arda`.
 | `arda pack list` | Show the optional tool packs |
 | `arda pack show hacker` | Show what a pack contains (installs nothing) |
 | `arda pack install hacker` | Install a pack: `hacker`, `network`, `security` or `dev` |
+| `arda share <file>` | Send a file or folder over Wi-Fi (see Share files) |
+| `arda share receive` | Get files from another device over Wi-Fi |
+| `arda status` | Battery, Wi-Fi, IP, storage and memory |
+| `arda lock` | Lock the screen (laptop; also Super + L) |
+| `arda buttons` | Create the phone's home-screen buttons |
 | `arda cams` | Find IP cameras and NVRs on your network (see Camera finder) |
 | `arda audit <ip>` | Safe security checkup of one device you own (see Camera finder) |
 | `arda update` | Phone: git pull + reinstall. Laptop: dnf upgrade + GitHub tools |
@@ -118,6 +154,22 @@ The programs underneath, with the one key you need to get out of each.
 | fd | Find files by name, fast | `fd .sh` | |
 | tldr | Short examples for any command | `cheat git` | |
 | fastfetch | The Şemistan home screen | `fastfetch` | |
+
+## Share files
+
+Phone and laptop on the same Wi-Fi, no cables, no WhatsApp-to-yourself.
+
+| Command | What it does |
+| --- | --- |
+| `arda share photo.jpg` | Shows a link and a QR code; open it on the other device to download |
+| `arda share ~/projects/app` | Shares a whole folder as a download page |
+| `arda share receive` | Shows an upload page link; pick files on the other device and they land here |
+| `arda share receive ~/somewhere` | Same, into a folder you choose |
+| `arda share get <link>` | Download a shared file from the terminal |
+
+Files land in Downloads (phone: run `termux-setup-storage` once so they go to the phone's Downloads folder). Each link has a random code, so other people on the Wi-Fi can't guess it. Ctrl+C stops sharing.
+
+Phone paths: photos are in `~/storage/dcim`, downloads in `~/storage/downloads` (after `termux-setup-storage`).
 
 ## Camera finder
 
@@ -238,6 +290,9 @@ The full ArdaOS (sway + kitty) adds keyboard shortcuts. Super is the Windows key
 | `Super + F` | Fullscreen |
 | `Super + Shift + E` | Power menu |
 | `Super + Shift + R` | Reload the sway config |
+| `Super + L` | Lock the screen |
+
+The screen also locks after 10 minutes idle, turns off after 15, and always locks before sleep. The lock screen shows Şemistan in your current theme's colors. Notifications appear top right.
 
 Build the ISO on Fedora:
 
@@ -248,6 +303,17 @@ cd ardaos
 ```
 
 It needs about 15 GB free and takes 20 to 40 minutes. The result is `out/ardaos.iso`; open it in GNOME Boxes with 3D acceleration on. Login: user `arda`, password `arda`.
+
+## Phone extras
+
+Two small add-on apps unlock more on the phone. Get them from **F-Droid, the same place you got Termux** (mixing sources breaks them).
+
+| App | Unlocks | Then |
+| --- | --- | --- |
+| Termux:API | Battery and Wi-Fi in `arda status` and on the home screen, notifications, clipboard | Give it Location permission to see the Wi-Fi name |
+| Termux:Widget | Home-screen buttons: ArdaOS, AI chat, Ask AI, Find cameras, Receive files, Status, Update, Matrix | Long-press the home screen → Widgets → Termux:Widget |
+
+Change the buttons: edit `$PREFIX/share/ardaos/buttons.list` (or add your own scripts to `~/.shortcuts`), then run `arda buttons`.
 
 ## Phone tips and fixes
 

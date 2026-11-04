@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# desc: lock the screen (laptop) — Super+L, and automatically after 10 minutes idle
+#   arda lock          → lock now
+#   arda lock render   → redraw the Şemistan lock image (arda theme does this for you)
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+IMG="${XDG_CONFIG_HOME:-$HOME/.config}/ardaos/lock.png"
+
+render() {  # draws Şemistan + the distro name in the current theme's colors
+  local im theme bg accent muted font logo
+  im=$(command -v magick || command -v convert) || return 0
+  theme="$ARDAOS_SHARE/themes/$(state_get THEME).theme"
+  [[ -f $theme ]] || theme="$ARDAOS_SHARE/themes/${DEFAULT_THEME:-tokyo-night}.theme"
+  pick() { sed -n "s/^$1 *= *//p" "$theme"; }
+  bg=$(pick bg); accent=$(pick accent); muted=$(pick muted)
+  font=$(find "$ARDAOS_FONT_DIR" /usr/share/fonts -iname '*NerdFontMono-Regular.ttf' 2>/dev/null | head -1 || true)
+  logo=$(sed 's/\$[0-9]//g' "$ARDAOS_SHARE/logo.txt")       # strip the color marks
+  logo=${logo//\\/\\\\}                 # ImageMagick reads \ as an escape: double them
+  logo=${logo// /$'\xc2\xa0'}             # non-breaking spaces (UTF-8 bytes): ImageMagick drops leading normal ones
+  mkdir -p "$(dirname "$IMG")"
+  # Şemistan is drawn as one left-aligned block (like in the terminal), then the block is centered
+  "$im" -size 1920x1080 "xc:$bg" \
+    \( +size -background none ${font:+-font "$font"} -fill "$accent" -pointsize 30 "label:$logo" \) \
+    -gravity center -geometry +0-270 -composite \
+    ${font:+-font "$font"} -fill "$muted" -pointsize 22 -annotate +0+190 "${DISTRO_NAME:-ArdaOS}  ·  type your password" \
+    "$IMG"
+}
+
+case "${1:-}" in
+  render) render ;;
+  -h|--help) sed -n '2,4s/^# *//p' "$0" ;;
+  *)
+    is_termux && { ui_info "the phone has its own lock screen 🙂"; exit 0; }
+    has swaylock || { ui_fail "swaylock is missing — sudo dnf install swaylock"; exit 1; }
+    [[ -f $IMG ]] || render || true
+    if [[ -f $IMG ]]; then exec swaylock -f -i "$IMG" -s fill
+    else exec swaylock -f; fi ;;
+esac

@@ -22,7 +22,8 @@ pkg upgrade -y -o Dpkg::Options::="--force-confnew"
 
 say "Installing the terminal stack…"
 for p in fish starship eza bat zoxide fd ripgrep fzf yazi lazygit htop neovim gum \
-         fastfetch tealdeer zellij git jq curl unzip xz-utils procps termux-tools; do
+         fastfetch tealdeer zellij git jq curl unzip xz-utils procps termux-tools \
+         python libqrencode termux-api; do
   printf '\n\e[1m── %s ──\e[0m\n' "$p"   # visible output: big downloads shouldn't look frozen
   pkg install -y -o Dpkg::Options::="--force-confnew" "$p" || warn "couldn't install $p (skipping)"
 done
@@ -57,6 +58,7 @@ chsh -s fish || warn "couldn't switch the shell to fish"
 arda theme apply "$DEFAULT_THEME"
 arda font apply "$DEFAULT_FONT" || true
 tldr --update >/dev/null 2>&1 || true
+arda buttons >/dev/null || true   # home-screen buttons (shows up once Termux:Widget is installed)
 touch "$HOME/.hushlogin"   # hide Termux's welcome text — Şemistan is the welcome now
 
 say "Done! Close Termux completely and open it again. Şemistan is waiting 🐈"

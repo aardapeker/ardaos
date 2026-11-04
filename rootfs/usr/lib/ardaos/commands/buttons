@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# desc: phone home-screen buttons (Termux:Widget) — arda buttons to (re)create them
+#   Edit the list in $PREFIX/share/ardaos/buttons.list, or add your own scripts to ~/.shortcuts
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+is_termux || { ui_info "buttons are for the phone (Termux:Widget) — on the laptop use Super+Space"; exit 0; }
+
+dir="$HOME/.shortcuts"
+mkdir -p "$dir"; chmod 700 "$dir"
+
+n=0
+while IFS='|' read -r name cmd keep; do
+  name=$(sed 's/^[[:space:]]*//;s/[[:space:]]*$//' <<< "$name")
+  [[ -z $name || $name == \#* ]] && continue
+  cmd=$(sed 's/^[[:space:]]*//;s/[[:space:]]*$//' <<< "$cmd")
+  keep=$(tr -d '[:space:]' <<< "$keep")
+  f="$dir/$name"
+  {
+    echo "#!$PREFIX/bin/bash"
+    echo "# made by: $ARDAOS_CMD buttons (re-running it rewrites this file)"
+    echo "$cmd"
+    [[ $keep == yes ]] && echo 'echo; read -rp "  press Enter to close "'
+  } > "$f"
+  chmod 700 "$f"
+  ((++n))
+done < "$ARDAOS_SHARE/buttons.list"
+
+ui_ok "$n buttons ready in ~/.shortcuts"
+cat <<'EOF'
+
+  To put them on your home screen:
+    1. Install Termux:Widget from F-Droid (same place as Termux)
+    2. Long-press the home screen → Widgets → Termux:Widget → drag it out
+    3. Tap a button. Done.
+EOF

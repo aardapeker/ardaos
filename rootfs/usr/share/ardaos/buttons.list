@@ -1,0 +1,10 @@
+# Home-screen buttons for the phone (Termux:Widget). One per line:  name | command | keep-open
+#   keep-open = yes → waits for Enter before closing, so you can read the result
+ArdaOS        | exec fish -l                 | no
+AI chat       | arda ask chat                | no
+Ask AI        | arda ask                     | yes
+Find cameras  | arda cams                    | yes
+Receive files | arda share receive           | no
+Status        | arda status                  | yes
+Update ArdaOS | arda update                  | yes
+Matrix        | cmatrix -C blue              | no

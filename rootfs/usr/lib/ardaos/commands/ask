@@ -1,107 +1,30 @@
 #!/usr/bin/env bash
-# desc: ask AI for a command — Claude, Gemini or any OpenAI-compatible API (ai … / ? …)
-#   arda ask setup     → pick a provider, paste its key, test it (keys are kept per provider)
-#   arda ask status    → which AI is active
-#   arda ask test      → raw answer from the active AI (for debugging)
-#   arda ask <text>    → get a command, then Run / Edit / Copy / Cancel
+# desc: AI helper — ai <task> · ai chat · ai web <question> · ai explain (Claude, Gemini, OpenAI-compatible)
+#   ai <text>            → AI writes a command, then Run / Edit / Copy / Cancel
+#   ai chat              → conversation with memory (/new /about /web /copy /exit)
+#   ai web <question>    → searches the web, answers with sources (Claude or Gemini)
+#   ai explain           → explains an error: paste it, give it as text, or pipe:  cmd &| ai explain
+#   arda ask setup       → pick a provider, paste its key, test it (keys are kept per provider)
+#   arda ask status      → which AI is active · arda ask test → raw answer (debugging)
 set -euo pipefail
 source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+# shellcheck source=../ai.sh
+source "$ARDAOS_LIB/ai.sh"
 
-CONF="${XDG_CONFIG_HOME:-$HOME/.config}/ardaos/ai.conf"   # chmod 600, keys inside
-
-# --- adapters: one per provider (same idea as Lifelog — adding one = one more entry) ---
-# id | label | default model (fast + cheap, it only writes one command)
-PROVIDERS=(
-  "anthropic|Claude|claude-haiku-5-5"
-  "gemini|Gemini|gemini-3.5-flash-lite"
-  "openai|OpenAI-compatible (Groq, OpenRouter, Ollama…)|"
-)
-field() { local p; for p in "${PROVIDERS[@]}"; do [[ ${p%%|*} == "$1" ]] && { cut -d'|' -f"$2" <<< "$p"; return; }; done; }
-
-call_anthropic() {  # system question key model
-  jq -n --arg m "$4" --arg s "$1" --arg q "$2" \
-    '{model:$m, max_tokens:400, system:$s, messages:[{role:"user", content:$q}]}' |
-  curl -sS https://api.anthropic.com/v1/messages -H "x-api-key: $3" \
-    -H "anthropic-version: 2023-06-01" -H "content-type: application/json" -d @- |
-  jq -r '.content[0].text // ("error: " + (.error.message // "unknown"))'
-}
-call_gemini() {
-  jq -n --arg s "$1" --arg q "$2" \
-    '{systemInstruction:{parts:[{text:$s}]}, contents:[{role:"user", parts:[{text:$q}]}],
-      generationConfig:{responseMimeType:"application/json"}}' |
-  curl -sS "https://generativelanguage.googleapis.com/v1beta/models/$4:generateContent" \
-    -H "x-goog-api-key: $3" -H "content-type: application/json" -d @- |
-  jq -r '.candidates[0].content.parts[0].text // ("error: " + (.error.message // "unknown"))'
-}
-# shellcheck disable=SC2154  # URL_openai comes from the config file
-call_openai() {
-  jq -n --arg m "$4" --arg s "$1" --arg q "$2" \
-    '{model:$m, messages:[{role:"system", content:$s}, {role:"user", content:$q}]}' |
-  curl -sS "${URL_openai%/}/chat/completions" -H "Authorization: Bearer $3" \
-    -H "content-type: application/json" -d @- |
-  jq -r '.choices[0].message.content // ("error: " + ((.error.message // .error // "unknown") | tostring))'
-}
-
-# --- config (keys per provider, one active provider) ---------------------------
-# shellcheck source=/dev/null
-load()  { if [[ -f $CONF ]]; then source "$CONF"; fi; }
-var()   { local n="$1_$2"; printf '%s' "${!n:-}"; }      # var KEY gemini → $KEY_gemini
-conf_set() {
-  mkdir -p "$(dirname "$CONF")"; ( umask 077; touch "$CONF" ); chmod 600 "$CONF"
-  sed -i "/^$1=/d" "$CONF"; printf '%s=%q\n' "$1" "$2" >> "$CONF"
-  printf -v "$1" '%s' "$2"
-}
-input() {  # input "placeholder" [default] [secret] [header] [prompt]
-  if has gum; then
-    gum input --placeholder "$1" --value "${2:-}" ${3:+--password} --width 60 \
-      --header "${4:-}" --prompt "${5:-❯ }" \
-      --header.foreground "$ARDAOS_ACCENT" --prompt.foreground "$ARDAOS_ACCENT" \
-      --cursor.foreground "$ARDAOS_ACCENT"
-  elif [[ -n ${3:-} ]]; then local v; read -rsp "$1: " v; echo >&2; echo "$v"
-  else local v; read -rei "${2:-}" -p "$1: " v; echo "$v"; fi
-}
-
-system_prompt() {
-  local where="ArdaOS (Fedora-based Linux)"
-  is_termux && where="Termux on Android (no root; use pkg, not apt/dnf; \$PREFIX is the root)"
-  cat <<EOF
-You are the command helper inside $where. The user's shell is fish, but your command will be run with bash.
-Current directory: $PWD
-Reply with ONLY a JSON object, no code fences: {"command": "...", "explain": "..."}
-- "command": one bash command line that does what the user asks. Prefer safe, read-only commands.
-  Use "" if the user asked a question that is not a command request.
-- "explain": one short sentence explaining it (or the answer, if command is "").
-EOF
-}
-call() {  # call provider question → raw model text
-  "call_$1" "$(system_prompt)" "$2" "$(var KEY "$1")" "$(var MODEL "$1")"
-}
-# our own tiny spinner (pure bash) — no separate process, works the same on Android and Fedora
-spin_call() {  # spin_call "title" provider question → raw model text
-  local f pid i=0 frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-  f=$(mktemp)
-  ( call "$2" "$3" >"$f" 2>&1 ) & pid=$!
-  while kill -0 "$pid" 2>/dev/null; do
-    printf '\r  \e[38;2;122;162;247m%s\e[0m %s ' "${frames:i++%10:1}" "$1" >&2; sleep 0.1
-  done
-  wait "$pid" || true
-  printf '\r\e[K' >&2
-  cat "$f"; rm -f "$f"
-}
-
-# --- setup / status --------------------------------------------------------------
+# --- setup / status ------------------------------------------------------------------
 setup() {
-  load
+  ai_load
   if has gum; then
     gum style --border rounded --padding "1 3" --margin "1 0" --border-foreground "$ARDAOS_ACCENT" \
       "$(gum style --bold "🤖  AI setup")" "" \
       "Pick a provider, paste its key, done." \
-      "$(gum style --faint "Keys stay on this device ($CONF, only you can read it).")"
+      "$(gum style --faint "Keys stay on this device ($AI_CONF, only you can read it).")"
   else ui_title "AI setup"; fi
-  local labels=() p id key model
+  local labels=() p id="" key model pick
   for p in "${PROVIDERS[@]}"; do labels+=("$(cut -d'|' -f2 <<< "$p")"); done
-  local pick; pick=$(ui_choose "step 1/3 · which AI?" "${labels[@]}") || exit 0
+  pick=$(ui_choose "step 1/3 · which AI?" "${labels[@]}") || exit 0
   for p in "${PROVIDERS[@]}"; do [[ $(cut -d'|' -f2 <<< "$p") == "$pick" ]] && id=${p%%|*}; done
+  [[ -n $id ]] || exit 0
 
   case $id in
     anthropic) ui_info "key: console.anthropic.com → API keys (starts with sk-ant-)" ;;
@@ -118,8 +41,9 @@ setup() {
   [[ -n $model ]] || { ui_fail "this provider needs a model name"; exit 1; }
 
   conf_set "KEY_$id" "$key"; conf_set "MODEL_$id" "$model"
-  local out; out=$(spin_call "testing $pick" "$id" 'Reply with {"command":"","explain":"hi"}')
-  if ! jq -e . >/dev/null 2>&1 <<< "$(sed -e 's/^```[a-z]*//' -e 's/```$//' <<< "$out")"; then
+  local out
+  out=$(spin "testing $pick" ai_send "$id" 'Reply with only this JSON: {"command":"","explain":"hi"}' "$(one_msg test)" json)
+  if ! jq -e . >/dev/null 2>&1 <<< "$(strip_fences <<< "$out")"; then
     ui_fail "the test didn't work. Here's what came back:"
     printf '\n\e[2m%s\e[0m\n\n' "${out:-(nothing — check your internet)}"
     if ui_confirm "Use $pick anyway?"; then conf_set AI_PROVIDER "$id"; ui_warn "active, but answers may fail"
@@ -128,66 +52,169 @@ setup() {
   fi
   conf_set AI_PROVIDER "$id"
   ui_ok "$pick answers! Active now · $model"
-  ui_info "try: ai find files bigger than 100MB"
+  ui_info "try: ai find files bigger than 100MB · ai chat · ai web … · ai explain"
 }
 
 status() {
-  load
+  ai_load
   ui_title "AI"
-  local p id
+  local p id mark key
   for p in "${PROVIDERS[@]}"; do
-    id=${p%%|*}
-    local mark="  " key; key=$(var KEY "$id")
+    id=${p%%|*}; mark="  "; key=$(var KEY "$id")
     [[ $id == "${AI_PROVIDER:-}" ]] && mark="▸ "
-    printf '  %s\e[1m%-10s\e[0m %-24s %s\n' "$mark" "$(field "$id" 2 | cut -d' ' -f1)" \
+    printf '  %s\e[1m%-10s\e[0m %-24s %s\n' "$mark" "$(short_label "$id")" \
       "$(var MODEL "$id")" "$([[ -n $key ]] && echo "key …${key: -4}" || echo "no key")"
   done
   echo; ui_info "switch: $ARDAOS_CMD ask setup"
 }
 
-# --- asking -------------------------------------------------------------------------
-looks_dangerous() {
-  grep -qE '(^|[;&| ])(sudo|rm|dd|mkfs|shred|chmod|chown|mv|kill|pkill|reboot|poweroff)( |$)|>[^&]|:\(\)' <<< "$1"
-}
-copy() {
-  if has termux-clipboard-set; then termux-clipboard-set <<< "$1"
-  elif has wl-copy; then wl-copy <<< "$1"
-  else echo "$1"; ui_info "(no clipboard tool — select it above)"; return; fi
-  ui_ok "copied"
+# --- ai <task>: one command ----------------------------------------------------------------
+command_system() {
+  cat <<EOF
+You are the command helper inside $(where_am_i). The user's shell is fish, but your command will be run with bash.
+Current directory: $PWD
+Reply with ONLY a JSON object, no code fences: {"command": "...", "explain": "..."}
+- "command": one bash command line that does what the user asks. Prefer safe, read-only commands.
+  Use "" if the user asked a question that is not a command request.
+- "explain": one short sentence explaining it (or the answer, if command is "").
+EOF
 }
 
 ask() {
-  load
-  if [[ -z ${AI_PROVIDER:-} ]]; then ui_warn "AI isn't set up yet — run: $ARDAOS_CMD ask setup"; exit 1; fi
+  require_ai
   local q="$*" raw cmd explain
   [[ -n $q ]] || q=$(input "what do you want to do?")
   [[ -n $q ]] || exit 0
-
-  raw=$(spin_call "thinking ($(field "$AI_PROVIDER" 2 | cut -d' ' -f1))" "$AI_PROVIDER" "$q")
-  raw=$(sed -e 's/^```[a-z]*//' -e 's/```$//' <<< "$raw")      # tolerate ```json fences
-
+  raw=$(spin "thinking ($(short_label "$AI_PROVIDER"))" ai_send "$AI_PROVIDER" "$(command_system)" "$(one_msg "$q")" json)
+  raw=$(strip_fences <<< "$raw")
   if ! cmd=$(jq -er '.command' <<< "$raw" 2>/dev/null); then
     echo; echo "$raw"; exit 0                                  # error or plain text → just show it
   fi
   explain=$(jq -r '.explain // ""' <<< "$raw")
-
   echo
   [[ -n $explain ]] && ui_info "$explain"
-  [[ -z $cmd ]] && exit 0
-  printf '\n  \e[1m❯ %s\e[0m\n\n' "$cmd"
-  looks_dangerous "$cmd" && ui_warn "this one changes or deletes things — read it carefully"
+  [[ -n $cmd ]] && offer_run "$cmd"
+  return 0
+}
 
-  case $(ui_choose "run it?" "Run" "Edit" "Copy" "Cancel") in
-    Run)  bash -c "$cmd" ;;
-    Edit) read -rei "$cmd" -p "  ❯ " cmd && bash -c "$cmd" ;;
-    Copy) copy "$cmd" ;;
-    *)    ui_info "bruh, ok. nothing ran." ;;
-  esac
+# --- ai web: search + sources -------------------------------------------------------------
+web() {
+  require_ai
+  local q="$*" ans src
+  [[ -n $q ]] || q=$(input "what should I look up?" "" "" "🌐 ai web")
+  [[ -n $q ]] || exit 0
+  src=$(mktemp); export AI_SOURCES=$src
+  ans=$(spin "searching the web ($(short_label "$AI_PROVIDER"))" ai_send "$AI_PROVIDER" \
+    "You are a research assistant in a terminal. Search the web, then answer in the user's language.
+Start with the direct answer, then short details. Markdown, under 200 words unless asked. Today is $(date +%F)." \
+    "$(one_msg "$q")" web)
+  if [[ $ans == error:* ]]; then ui_fail "${ans#error: }"; rm -f "$src"; exit 1; fi
+  echo; render_md "$ans"
+  print_sources "$src"; rm -f "$src"
+}
+
+# --- ai explain: errors ------------------------------------------------------------------
+explain() {
+  require_ai
+  local text="" raw md cmd
+  if [[ ! -t 0 ]]; then                                  # piped:  npm run build &| ai explain
+    text=$(cat)
+    if : 2>/dev/null </dev/tty; then exec </dev/tty; fi    # give the keyboard back for Run/Copy
+  elif (($#)); then text="$*"
+  else
+    ui_info "paste the error, then press Enter and Ctrl+D (phone: CTRL, then d)"
+    text=$(cat)
+  fi
+  [[ -n ${text//[[:space:]]/} ]] || { ui_warn "nothing to explain"; exit 0; }
+  text=$(tail -c 12000 <<< "$text")                       # long logs: the end has the error
+  raw=$(spin "reading the error" ai_send "$AI_PROVIDER" "You explain terminal errors on $(where_am_i).
+The user gives you an error message or command output. Reply with ONLY a JSON object, no code fences:
+{\"explain\": \"...\", \"command\": \"...\"}
+- \"explain\": markdown in the user's language, at most ~120 words, three bold parts: **What happened**, **Why**, **Fix**.
+- \"command\": one bash command that fixes it, or \"\" when the fix is not a single command." "$(one_msg "$text")" json)
+  if [[ $raw == error:* ]]; then ui_fail "${raw#error: }"; exit 1; fi
+  raw=$(strip_fences <<< "$raw")
+  if ! md=$(jq -er '.explain' <<< "$raw" 2>/dev/null); then echo; render_md "$raw"; exit 0; fi
+  cmd=$(jq -r '.command // ""' <<< "$raw")
+  echo; render_md "$md"
+  [[ -n $cmd ]] && offer_run "$cmd"
+  return 0
+}
+
+# --- ai chat: conversation with memory ---------------------------------------------------
+chat_system() {
+  local about
+  about=$(sed '/<!--/,/-->/d' "$AI_CHAT_DIR/about.md" 2>/dev/null | sed '/^[[:space:]]*$/d')
+  cat <<EOF
+You are the AI inside ArdaOS, the user's personal terminal-first OS, running on $(where_am_i).
+Talk like a helpful friend: short, plain and direct, in the user's language.
+Use markdown; put commands in \`\`\`bash blocks (the user runs them). Today is $(date '+%A %F %H:%M').
+${about:+What the user wrote about themselves:
+$about}
+EOF
+}
+
+chat_input() {
+  if has gum; then
+    gum input --placeholder "message… (/help)" --char-limit 0 --width 0 --prompt "❯ " \
+      --prompt.foreground "$ARDAOS_ACCENT" --cursor.foreground "$ARDAOS_ACCENT"
+  else local v; read -erp "❯ " v || return 1; printf '%s' "$v"; fi
+}
+
+chat() {
+  require_ai
+  local cur="$AI_CHAT_DIR/current.json" about="$AI_CHAT_DIR/about.md" rgb
+  mkdir -p "$AI_CHAT_DIR/history"
+  [[ -s $cur ]] && jq -e 'type=="array"' "$cur" >/dev/null 2>&1 || echo '[]' > "$cur"
+  [[ -f $about ]] || cat > "$about" <<'EOF'
+# About me
+<!-- Write anything the AI should know: your name, job, what you're learning,
+     how you like answers. It is sent with every chat message.
+     Edit it any time with /about inside ai chat. Lines inside these marks are ignored. -->
+EOF
+  rgb=$(accent_rgb)
+  local title; title="💬 ai chat · $(short_label "$AI_PROVIDER") · $(var MODEL "$AI_PROVIDER")"
+  if has gum; then gum style --border rounded --padding "0 2" --margin "1 0" --border-foreground "$ARDAOS_ACCENT" \
+                     "$(gum style --bold "$title")" "$(gum style --faint "/new · /about · /web <q> · /copy · /exit")"
+  else ui_title "$title"; fi
+  local n; n=$(jq length "$cur")
+  ((n)) && ui_info "continuing ($((n / 2)) messages) · /new starts fresh"
+
+  local q mode msgs ans src
+  while true; do
+    q=$(chat_input) || break                               # Esc / Ctrl+C
+    q=$(sed 's/^[[:space:]]*//;s/[[:space:]]*$//' <<< "$q")
+    [[ -n $q ]] || continue
+    mode=text
+    case $q in
+      /exit|/quit|/q) break ;;
+      /help) ui_info "/new fresh chat · /about what the AI knows about you · /web <q> search · /copy last answer · /exit"; continue ;;
+      /new)
+        if (($(jq length "$cur"))); then mv "$cur" "$AI_CHAT_DIR/history/$(date +%Y%m%d-%H%M%S).json"; fi
+        echo '[]' > "$cur"; ui_ok "new chat"; continue ;;
+      /about) "${EDITOR:-nvim}" "$about" </dev/tty >/dev/tty; ui_ok "saved — the AI reads it from now on"; continue ;;
+      /copy) copy "$(jq -r '[.[] | select(.role=="assistant")] | last.content // ""' "$cur")"; continue ;;
+      "/web "*) mode=web; q=${q#/web } ;;
+      /*) ui_warn "unknown command — /help"; continue ;;
+    esac
+    printf '\n  \e[1;38;2;%sm❯\e[0m %s\n' "$rgb" "$q"
+    msgs=$(jq --arg q "$q" '. + [{role:"user", content:$q}] | .[-21:]' "$cur")   # odd → starts with the user
+    src=$(mktemp); export AI_SOURCES=$src
+    ans=$(spin "thinking" ai_send "$AI_PROVIDER" "$(chat_system)" "$msgs" "$mode")
+    if [[ $ans == error:* ]]; then ui_fail "${ans#error: }"; rm -f "$src"; continue; fi
+    echo; render_md "$ans"; print_sources "$src"; rm -f "$src"; echo
+    jq --arg q "$q" --arg a "$ans" '. + [{role:"user", content:$q}, {role:"assistant", content:$a}]' \
+      "$cur" > "$cur.tmp" && mv "$cur.tmp" "$cur"
+  done
+  echo; ui_info "saved — ai chat picks up where you left off"
 }
 
 case "${1:-}" in
-  test)   load; call "${AI_PROVIDER:?not set up yet}" 'Reply with {"command":"","explain":"hi"}' ;;
-  setup)  setup ;;
-  status) status ;;
-  *)      ask "$@" ;;
+  setup)   setup ;;
+  status)  status ;;
+  test)    require_ai; ai_send "$AI_PROVIDER" 'Reply with only this JSON: {"command":"","explain":"hi"}' "$(one_msg test)" json ;;
+  chat)    chat ;;
+  web)     shift; web "$@" ;;
+  explain) shift; explain "$@" ;;
+  *)       ask "$@" ;;
 esac

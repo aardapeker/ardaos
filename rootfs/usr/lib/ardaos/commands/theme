@@ -54,6 +54,8 @@ reload_apps() {
   pkill -USR1 -x kitty 2>/dev/null || true                     # kitty re-reads its config
   if in_sway; then swaymsg reload >/dev/null 2>&1 || true; fi   # wallpaper + borders
   if has termux-reload-settings; then termux-reload-settings; fi
+  if has makoctl; then makoctl reload 2>/dev/null || true; fi
+  if ! is_termux && has swaylock; then "$ARDAOS_LIB/commands/lock" render >/dev/null 2>&1 || true; fi
 }
 
 live() {  # recolor the screen right now (used while scrolling the menu)

@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# desc: battery, Wi-Fi, IP, storage and memory (arda status · --line for the home screen)
+#   Phone: needs the Termux:API app (F-Droid) + pkg install termux-api for battery and Wi-Fi.
+set -uo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+line=0; [[ ${1:-} == --line ]] && line=1
+
+# --- collect -------------------------------------------------------------------------
+bat="" charging="" temp="" ssid="" signal="" ip="" disk="" mem="" api=""
+ip=$(local_ip || true)
+
+if is_termux; then
+  # Without the Termux:API app these calls hang, so: short timeouts, and the home-screen line
+  # skips them once they've failed (a full `arda status` tries again).
+  if ((line == 0)) || [[ $(state_get TERMUX_API) != no ]]; then
+    if has termux-battery-status && b=$(timeout 3 termux-battery-status 2>/dev/null) && [[ -n $b ]]; then
+      api=yes
+      bat=$(jq -r '.percentage // empty' <<< "$b")
+      [[ $(jq -r '.status // ""' <<< "$b") == CHARGING ]] && charging=1
+      temp=$(jq -r '.temperature // empty | floor' <<< "$b")
+      w=$(timeout 3 termux-wifi-connectioninfo 2>/dev/null || true)
+      ssid=$(jq -r '.ssid // empty' <<< "$w" 2>/dev/null | grep -v '<unknown ssid>' || true)
+      signal=$(jq -r '.rssi // empty' <<< "$w" 2>/dev/null || true)
+      [[ -z $ssid && $(jq -r '.supplicant_state // ""' <<< "$w" 2>/dev/null) == COMPLETED ]] && ssid="Wi-Fi"
+    else
+      api=no
+    fi
+    state_set TERMUX_API "$api"
+  fi
+  disk=$(df -h /storage/emulated/0 2>/dev/null | awk 'NR==2{print $4" free of "$2}')
+  [[ -n $disk ]] || disk=$(df -h "$HOME" | awk 'NR==2{print $4" free of "$2}')
+else
+  for b in /sys/class/power_supply/BAT*; do
+    [[ -r $b/capacity ]] || continue
+    bat=$(<"$b/capacity"); [[ $(<"$b/status") == Charging ]] && charging=1; break
+  done
+  if has nmcli; then
+    w=$(nmcli -t -f active,ssid,signal dev wifi 2>/dev/null | grep '^yes' | head -1)
+    ssid=$(cut -d: -f2 <<< "$w"); signal=$(cut -d: -f3 <<< "$w")
+  fi
+  disk=$(df -h / | awk 'NR==2{print $4" free of "$2}')
+fi
+mem=$(free -h 2>/dev/null | awk '/^Mem/{print $3" / "$2}')
+
+bat_icon() { if [[ -n $charging ]]; then echo "⚡"; elif ((${1:-100} <= 20)); then echo "🪫"; else echo "🔋"; fi; }
+
+# --- one line for the home screen ----------------------------------------------------
+if ((line)); then
+  parts=()
+  [[ -n $bat ]]  && parts+=("$(bat_icon "$bat") $bat%")
+  [[ -n $ssid ]] && parts+=("📶 $ssid")
+  [[ -n $ip ]]   && parts+=("📍 $ip")
+  ((${#parts[@]})) || parts=("offline")
+  out=""; for p in "${parts[@]}"; do out+="${out:+ · }$p"; done
+  echo "$out"
+  exit 0
+fi
+
+# --- full view -------------------------------------------------------------------------
+ui_title "📱 status"
+row() { printf '  \e[1m%-9s\e[0m %s\n' "$1" "$2"; }
+if [[ -n $bat ]]; then
+  row battery "$(bat_icon "$bat") $bat%${charging:+ · charging}${temp:+ · ${temp}°C}"
+fi
+if [[ -n $ssid ]]; then
+  if [[ -n $signal && $signal == -* ]]; then sig="$signal dBm"; else sig="${signal:+$signal%}"; fi
+  row wifi "📶 $ssid${sig:+ · $sig}"
+fi
+row ip "📍 ${ip:-offline}"
+row storage "💾 $disk"
+[[ -n $mem ]] && row memory "🧠 $mem"
+
+if is_termux && [[ $api == no ]]; then
+  echo
+  ui_info "battery + Wi-Fi need the Termux:API app (F-Droid, same place as Termux)"
+  ui_info "and: pkg install termux-api · Wi-Fi name also needs Location permission for Termux:API"
+fi

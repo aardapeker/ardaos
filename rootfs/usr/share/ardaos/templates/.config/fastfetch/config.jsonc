@@ -19,6 +19,7 @@
     { "type": "uptime", "key": "uptime" },
     { "type": "shell", "key": "shell " },
     { "type": "memory", "key": "memory" },
+    { "type": "command", "key": "status", "text": "arda status --line" },
     { "type": "command", "key": "theme ", "text": "arda theme name" },
     { "type": "command", "key": "font  ", "text": "arda font current" },
     "break",

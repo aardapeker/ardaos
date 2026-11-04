@@ -45,6 +45,11 @@ It's a **live** system: changes are lost when you reboot. That's fine for testin
 | | |
 |---|---|
 | `ai <what you want>` | AI writes the command → Run / Edit / Copy. Claude, Gemini or any OpenAI-compatible API (`arda ask setup`) |
+| `ai chat` · `ai web <q>` · `ai explain` | conversation with memory · web search with sources · explain an error |
+| `arda share <file>` · `arda share receive` | send / receive files between phone and laptop over Wi-Fi (link + QR code) |
+| `arda status` | battery, Wi-Fi, IP, storage (also on the home screen) |
+| `arda lock` | lock screen with Şemistan (laptop, Super + L, auto after 10 min) |
+| `arda buttons` | phone home-screen buttons (Termux:Widget) |
 | `arda help` | everything ArdaOS can do (`bruh help` works too 😏) |
 | `arda theme` | switch theme everywhere, **live preview** while you scroll |
 | `arda font` | JetBrains Mono · Maple Mono · Iosevka |

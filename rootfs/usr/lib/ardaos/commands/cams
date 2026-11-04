@@ -16,12 +16,7 @@ for a in "$@"; do
   esac
 done
 
-detect_subnet() {
-  local ip
-  ip=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
-  [[ -n $ip ]] || ip=$(ifconfig 2>/dev/null | awk '/inet /{print $2}' | sed 's/addr://' | grep -v '^127\.' | head -1)
-  [[ -n $ip ]] && echo "${ip%.*}.0/24"
-}
+detect_subnet() { local ip; ip=$(local_ip) && echo "${ip%.*}.0/24"; }
 
 has nmap || { ui_fail "nmap is missing — install it: $ARDAOS_CMD pack install network"; exit 1; }
 [[ -n $subnet ]] || subnet=$(detect_subnet) || true
