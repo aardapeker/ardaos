@@ -1,0 +1,7 @@
+# desc: protect yourself — audit, VPN, encryption, passwords
+# termux package | fedora package | what it's for          ("-" = not available there)
+-               | lynis           | audit THIS system, get a score + fixes (sudo lynis audit system)
+wireguard-tools | wireguard-tools | your own VPN (wg, wg-quick)
+age             | age             | simple file encryption: age -p secret.txt > secret.txt.age
+gnupg           | gnupg2          | gpg — classic encryption and signing
+pass            | pass            | password manager in the terminal (uses gpg)

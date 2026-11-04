@@ -1,60 +1,130 @@
 #!/usr/bin/env bash
-# desc: find IP cameras & NVRs on a network (needs the 'network' pack: arda pack install network)
-#   arda cams                 → scan your current /24
-#   arda cams 192.168.1.0/24  → scan a specific range
-# Only scan networks you own or are authorized to test.
-set -uo pipefail
+# desc: find IP cameras & NVRs on your network (arda cams · arda cams 10.0.0.0/24 · --mac)
+#   Only scan networks you own or are working on.
+set -euo pipefail
 source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
 
-has nmap || { ui_fail "needs nmap — run: $ARDAOS_CMD pack install network"; exit 1; }
+# web · https · RTSP · Hikvision SDK · alt web · ONVIF (some brands) · Dahua · XMEye/Xiongmai
+PORTS=80,443,554,8000,8080,8899,37777,34567
 
-# work out the range: argument, or this device's own /24
-range="${1:-}"
-if [[ -z $range ]]; then
-  ip=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}')
-  [[ -z $ip ]] && ip=$(ip -4 addr 2>/dev/null | grep -oE 'inet [0-9.]+' | grep -v 127.0.0 | head -1 | awk '{print $2}')
-  [[ -n $ip ]] || { ui_fail "couldn't detect your network — pass one: $ARDAOS_CMD cams 192.168.1.0/24"; exit 1; }
-  range="${ip%.*}.0/24"
-fi
-
-ui_title "scanning $range for cameras"
-ui_warn "only scan networks you own or are allowed to test"
-echo
-
-# camera-ish ports: 554 RTSP, 80/443 web, 8000 Hikvision, 37777 Dahua, 2020 ONVIF
-scan=$(mktemp)
-# -sT works without root (phone-friendly); -Pn: don't skip hosts that ignore ping
-if ! ui_spin "nmap (this can take a minute)" nmap -sT -Pn --open \
-     -p 80,443,554,8000,8080,37777,2020 "$range" -oG "$scan" >/dev/null 2>&1; then
-  ui_fail "scan failed"; rm -f "$scan"; exit 1
-fi
-
-brand() {  # guess the brand from which ports are open
-  case " $1 " in
-    *" 8000 "*) echo "Hikvision" ;;
-    *" 37777 "*) echo "Dahua" ;;
-    *" 554 "*) echo "camera/NVR" ;;
-    *) echo "device" ;;
+subnet="" want_mac=0
+for a in "$@"; do
+  case $a in
+    --mac) want_mac=1 ;;
+    -h|--help) sed -n '2,3s/^# //p' "$0"; exit 0 ;;
+    *) subnet=$a ;;
   esac
+done
+
+detect_subnet() {
+  local ip
+  ip=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
+  [[ -n $ip ]] || ip=$(ifconfig 2>/dev/null | awk '/inet /{print $2}' | sed 's/addr://' | grep -v '^127\.' | head -1)
+  [[ -n $ip ]] && echo "${ip%.*}.0/24"
 }
-label() { case $1 in 554) echo RTSP;; 80|8080) echo web;; 443) echo https;; 2020) echo ONVIF;; *) echo "$1";; esac; }
 
-printf '  \e[1m%-16s %-12s %s\e[0m\n' "IP" "likely" "open ports"
-found=0
-while read -r _ ip ports; do
-  [[ $ip == Host:* ]] && continue   # skip malformed
-  open=$(grep -oE '[0-9]+/open' <<< "$ports" | cut -d/ -f1 | tr '\n' ' ')
-  [[ -z $open ]] && continue
-  names=$(for p in $open; do label "$p"; done | tr '\n' ' ')
-  printf '  \e[38;2;122;162;247m%-16s\e[0m %-12s %s\n' "$ip" "$(brand "$open")" "$names"
-  ((found++))
-done < <(grep '/open' "$scan" | sed -E 's/Host: ([0-9.]+).*Ports: (.*)Ignored.*/X \1 \2/; t; s/Host: ([0-9.]+).*Ports: (.*)/X \1 \2/')
-rm -f "$scan"
+has nmap || { ui_fail "nmap is missing — install it: $ARDAOS_CMD pack install hacker"; exit 1; }
+[[ -n $subnet ]] || subnet=$(detect_subnet) || true
+[[ -n $subnet ]] || { ui_fail "couldn't find your network — give it: $ARDAOS_CMD cams 192.168.1.0/24"; exit 1; }
 
-echo
-if ((found)); then
-  ui_ok "$found device(s) with camera-like ports"
-  ui_info "watch a stream:  mpv rtsp://user:pass@IP:554/  ·  inspect it:  ffprobe rtsp://..."
-else
-  ui_warn "nothing found — try a different range: $ARDAOS_CMD cams 192.168.0.0/24"
+ui_title "📹 cameras on $subnet"
+ui_info "only scan networks you own or are working on"
+
+# --- 1. who answers on camera ports ------------------------------------------------
+scan=$(ui_spin_out "scanning $subnet" nmap -sT -T4 -n --open -p "$PORTS" -oG - "$subnet" 2>/dev/null || true)
+mapfile -t hosts < <(sed -n 's/^Host: \([0-9.]*\) .*Ports: \(.*\)/\1 \2/p' <<< "$scan")
+if ((${#hosts[@]} == 0)); then
+  ui_warn "nothing answered on camera ports"
+  ui_info "on mobile data? join the site's Wi-Fi or LAN first"
+  exit 0
 fi
+
+# --- 2. optional: MAC vendors (needs root → laptop with sudo) -------------------
+declare -A vendor=()
+if ((want_mac)); then
+  if is_termux; then ui_warn "--mac needs root, not possible on the phone"
+  else
+    while read -r ip v; do vendor[$ip]=$v; done < <(
+      sudo nmap -sn -n "$subnet" 2>/dev/null | awk '
+        /^Nmap scan report for/ {ip=$NF}
+        /^MAC Address:/ {sub(/^[^(]*\(/,""); sub(/\)$/,""); print ip, $0}')
+  fi
+fi
+
+# --- 3. probe each host in parallel: web title / server header + ONVIF ---------
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+probe() {  # probe ip → "server|title|onvif_http_code" (never fails: a silent device is fine)
+  set +e +o pipefail
+  local ip=$1 head title code
+  head=$(curl -m 3 -s -I "http://$ip/" 2>/dev/null | tr -d '\r' | sed -n 's/^[Ss]erver: *//p' | head -1)
+  title=$(curl -m 3 -s "http://$ip/" 2>/dev/null | tr -d '\r\n' | grep -io '<title>[^<]*' | head -1 | sed 's/<title>//I')
+  code=$(curl -m 3 -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/soap+xml' \
+           "http://$ip/onvif/device_service" 2>/dev/null || true)
+  printf '%s|%s|%s\n' "$head" "$title" "$code"
+}
+for h in "${hosts[@]}"; do probe "${h%% *}" > "$tmp/${h%% *}" & done
+wait
+
+# --- 4. decide what each device is -----------------------------------------------
+brand_of() {  # brand_of ports server title vendor
+  local p=$1 s="$2 $3 $4"
+  case ${s,,} in
+    *hikvision*|*app-webs*|*dnvrs-webs*) echo Hikvision; return ;;
+    *dahua*) echo Dahua; return ;;
+    *uc-httpd*|*xiongmai*|*netsurveillance*) echo XMEye; return ;;
+    *axis*) echo Axis; return ;;
+    *uniview*|*unv*) echo Uniview; return ;;
+    *reolink*) echo Reolink; return ;;
+  esac
+  [[ $p == *" 8000/"* || $p == "8000/"* ]] && { echo "Hikvision?"; return; }
+  [[ $p == *37777/* ]] && { echo "Dahua?"; return; }
+  [[ $p == *34567/* ]] && { echo "XMEye?"; return; }
+  echo ""
+}
+mark() { [[ $1 == 1 ]] && printf '\e[32m✓\e[0m' || printf '\e[2m·\e[0m'; }
+
+cams=() others=()
+for h in "${hosts[@]}"; do
+  ip=${h%% *}; ports=" ${h#* }"
+  server="" title="" code=""
+  IFS='|' read -r server title code < "$tmp/$ip" || true
+  rtsp=0 web=0 onvif=0
+  [[ $ports == *" 554/open"* ]] && rtsp=1
+  [[ $ports == *" 80/open"* || $ports == *" 443/open"* || $ports == *" 8080/open"* ]] && web=1
+  [[ -n $code && $code != 000 && $code != 404 ]] && onvif=1
+  brand=$(brand_of "$ports" "$server" "$title" "${vendor[$ip]:-}")
+  label=${brand:-${vendor[$ip]:-${title:-${server:-?}}}}
+  line=$(printf '  %-16s %-18.18s  RTSP %s  web %s  ONVIF %s' "$ip" "$label" \
+          "$(mark $rtsp)" "$(mark $web)" "$(mark $onvif)")
+  if ((rtsp || onvif)) || [[ -n $brand ]]; then cams+=("$line|$ip|${brand%\?}")
+  else others+=("$line"); fi
+done
+
+# --- 5. show it ----------------------------------------------------------------------
+if ((${#cams[@]})); then
+  printf '\n  \e[1m%s camera(s) / NVR(s)\e[0m\n' "${#cams[@]}"
+  for c in "${cams[@]}"; do echo "${c%%|*}"; done | sort -t. -k4 -n
+else
+  printf '\n  \e[1mno cameras found\e[0m\n'
+fi
+if ((${#others[@]})); then
+  printf '\n  \e[2mother devices with web ports\e[0m\n'
+  for o in "${others[@]}"; do printf '\e[2m%s\e[0m\n' "$o"; done | sort -t. -k4 -n
+fi
+
+# --- 6. what to do next: a ready RTSP URL for the first camera ----------------------
+if ((${#cams[@]})); then
+  IFS='|' read -r _ ip brand <<< "${cams[0]}"
+  case $brand in
+    Hikvision) url="rtsp://USER:PASS@$ip:554/Streaming/Channels/101" ;;
+    Dahua)     url="rtsp://USER:PASS@$ip:554/cam/realmonitor?channel=1&subtype=0" ;;
+    XMEye)     url="rtsp://$ip:554/user=USER&password=PASS&channel=1&stream=0.sdp" ;;
+    *)         url="rtsp://USER:PASS@$ip:554/" ;;
+  esac
+  play="mpv"; is_termux && play="mpv --vo=tct"
+  echo
+  ui_info "check a stream:  ffprobe -rtsp_transport tcp \"$url\""
+  ui_info "watch it:        $play \"$url\""
+  has ffprobe || ui_info "(ffprobe + mpv: $ARDAOS_CMD pack install network)"
+fi
+((want_mac)) || is_termux || ui_info "tip: $ARDAOS_CMD cams --mac also shows vendors from MAC addresses (sudo)"

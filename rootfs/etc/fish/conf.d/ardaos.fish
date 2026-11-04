@@ -57,3 +57,8 @@ alias home 'swaymsg workspace 1 >/dev/null'
 # AI helper: ai find big files  (or: ? find big files)
 alias ai 'arda ask'
 abbr -a -- '?' 'arda ask' 2>/dev/null
+
+# speed test: speedtest-cli on the laptop, speedtest-go on the phone
+for s in speedtest-cli speedtest-go
+    if command -q $s; alias speedtest $s; break; end
+end

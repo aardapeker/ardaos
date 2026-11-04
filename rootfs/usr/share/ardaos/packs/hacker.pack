@@ -1,13 +1,17 @@
 # desc: network & security tools — only use them on networks you own or are allowed to test
 # termux package | fedora package | what it's for          ("-" = not available there)
+# "gh:owner/repo@asset-regex@binary" = installed from a GitHub release
 nmap            | nmap          | port/host scanner (phone has no root → use: nmap -sT)
 netcat-openbsd  | nmap-ncat     | nc — raw TCP/UDP swiss-army knife
 dnsutils        | bind-utils    | dig / nslookup — DNS lookups
 whois           | whois         | who owns a domain or IP
 traceroute      | traceroute    | the path packets take to a host
 -               | mtr           | live traceroute + packet loss (laptop only)
+-               | arp-scan      | every device on the LAN + its vendor from the MAC (sudo arp-scan -l)
 openssl-tool    | openssl       | inspect TLS certificates
 httpie          | httpie        | friendly HTTP requests (http GET ...)
 -               | tcpdump       | packet capture (laptop only, needs root)
 -               | wireshark-cli | tshark — Wireshark in the terminal (laptop only)
+-               | gh:gcla/termshark@_linux_x64\.tar\.gz$@termshark | termshark — Wireshark with a real TUI (sudo termshark -i any)
+-               | bandwhich     | which app / IP eats your bandwidth, live (sudo bandwhich)
 cmatrix         | cmatrix       | Matrix rain. Purely for the vibes 😎

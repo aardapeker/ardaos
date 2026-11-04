@@ -27,19 +27,26 @@ case "${1:-list}" in
     ui_title "$p pack"
     sed -n 's/^# desc: /  /p' "$(pack_file "$p")"; echo
     while IFS='|' read -r pkg what; do
-      [[ $pkg == - ]] && printf '  \e[2m%-22s %s\e[0m\n' "(n/a here)" "$what" || printf '  \e[1m%-22s\e[0m %s\n' "$pkg" "$what"
+      [[ $pkg == gh:* ]] && pkg=$(cut -d@ -f3 <<< "$pkg")   # show just the binary name
+      [[ $pkg == - ]] && printf '  \e[2m%-22s %s\e[0m\n' "(n/a here)" "$what" || printf '  \e[1m%-22s\e[0m %s\n' "${pkg#npm:}" "$what"
     done < <(rows "$p") ;;
   install)
     p=${2:?usage: $ARDAOS_CMD pack install <pack>}
     ui_title "installing the $p pack"
     is_termux || sudo -v
     sudo_=(); is_termux || sudo_=(sudo)
+    bin_dir=/usr/local/bin; is_termux && bin_dir="$PREFIX/bin"
     while IFS='|' read -r pkg _; do
       [[ $pkg == - ]] && continue
-      if [[ $pkg == npm:* ]]; then cmd=("${sudo_[@]}" npm install -g "${pkg#npm:}")
+      name=${pkg#npm:}
+      if [[ $pkg == gh:* ]]; then                    # gh:owner/repo@regex@binary → GitHub release
+        IFS='@' read -r repo regex name <<< "${pkg#gh:}"
+        list=$(mktemp); printf 'bin | %s | %s | %s\n' "$repo" "$regex" "$name" > "$list"; chmod 644 "$list"
+        cmd=("${sudo_[@]}" env ARDAOS_BIN_DIR="$bin_dir" "$ARDAOS_LIB/tools.sh" "$list")
+      elif [[ $pkg == npm:* ]]; then cmd=("${sudo_[@]}" npm install -g "$name")
       elif is_termux; then cmd=(pkg install -y "$pkg")
       else cmd=(sudo dnf install -y "$pkg"); fi
-      if ui_spin "${pkg#npm:}" "${cmd[@]}"; then ui_ok "${pkg#npm:}"; else ui_warn "${pkg#npm:} not available, skipped"; fi
+      if ui_spin "$name" "${cmd[@]}"; then ui_ok "$name"; else ui_warn "$name not available, skipped"; fi
     done < <(rows "$p")
     ui_info "see what you got: $ARDAOS_CMD pack show $p" ;;
   *) ui_fail "usage: $ARDAOS_CMD pack [list|show <pack>|install <pack>]"; exit 1 ;;
