@@ -49,15 +49,11 @@ choose_many() {  # choose_many "header" option… → the chosen ones, one per l
 
 # --- welcome ---------------------------------------------------------------------------
 clear 2>/dev/null || true
-if has gum; then
-  gum style --border rounded --padding "1 4" --margin "1 0" --border-foreground "$ARDAOS_ACCENT" --align center \
-    "$(sed 's/\$[0-9]//g' "$ARDAOS_SHARE/logo.txt")" "" \
-    "$(gum style --bold "Welcome to ${DISTRO_NAME:-ArdaOS}")" \
-    "$(gum style --faint "A few quick questions. Every step can be skipped and changed later.")"
-else
-  ui_title "Welcome to ${DISTRO_NAME:-ArdaOS}"
-  ui_info "A few quick questions. Every step can be skipped and changed later."
-fi
+ui_logo
+echo
+ui_box "Welcome to ${DISTRO_NAME:-ArdaOS}" \
+  "A few quick questions. Every step can be skipped and changed later."
+echo
 ask_yes "Start the setup?" || { ui_info "no problem — run 'arda setup' any time"; exit 0; }
 
 # --- 1. theme ---------------------------------------------------------------------------
@@ -156,11 +152,6 @@ fi
 finished=1
 state_set SETUP "done"
 echo
-summary=$(printf '  ✓ %s\n' "${done_list[@]}")
-if has gum; then
-  gum style --border rounded --padding "1 3" --margin "1 0" --border-foreground "$ARDAOS_ACCENT" \
-    "$(gum style --bold "All set 🐈")" "" "$summary" "" \
-    "$(gum style --faint "arda help · all commands      arda setup · run this again")"
-else
-  ui_title "All set 🐈"; printf '%s\n\n' "$summary"; ui_info "arda help · all commands · arda setup · run this again"
-fi
+lines=()
+for d in "${done_list[@]}"; do lines+=("✓ $d"); done
+ui_box "All set 🐈" "${lines[@]}" "" "arda help → all commands" "arda setup → run this again"

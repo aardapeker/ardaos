@@ -65,8 +65,7 @@ notes+=("Default passwords: make sure this device is NOT still on admin/admin, a
 # --- report -------------------------------------------------------------------
 echo
 if ((${#notes[@]})); then
-  if has gum; then gum style --border rounded --padding "0 2" --border-foreground '#e0af68' --bold "things to check (${#notes[@]})"
-  else printf '  \e[1;33mthings to check (%s)\e[0m\n' "${#notes[@]}"; fi
+  printf '  \e[1;33mthings to check (%s)\e[0m\n' "${#notes[@]}"
   for n in "${notes[@]}"; do printf '  \e[33m•\e[0m %s\n' "$n"; done
 fi
 echo

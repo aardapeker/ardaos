@@ -108,11 +108,7 @@ one_msg() { jq -n --arg q "$1" '[{role:"user", content:$q}]'; }
 strip_fences() { sed -e 's/^```[a-z]*//' -e 's/```$//'; }
 
 # --- terminal helpers ------------------------------------------------------------
-accent_rgb() {
-  local h=${ARDAOS_ACCENT#\#}
-  [[ $h =~ ^[0-9a-fA-F]{6}$ ]] || h=7aa2f7
-  printf '%d;%d;%d' "0x${h:0:2}" "0x${h:2:2}" "0x${h:4:2}"
-}
+accent_rgb() { hex_rgb "$ARDAOS_ACCENT"; }
 
 # spin "title" command args… → runs it in the background with a pure-bash spinner, prints its output
 spin() {

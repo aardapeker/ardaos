@@ -24,10 +24,7 @@ free_port() {  # first free port from $PORT up
 
 show_link() {  # show_link url what
   echo
-  if has gum; then
-    gum style --border rounded --padding "0 2" --border-foreground "$ARDAOS_ACCENT" \
-      "$(gum style --bold "$2")" "" "$1"
-  else printf '  \e[1m%s\e[0m\n  %s\n' "$2" "$1"; fi
+  ui_box "$2" "" "$1"
   if has qrencode; then echo; qrencode -t ANSIUTF8 -m 1 "$1" | sed 's/^/  /'; fi
   echo
   ui_info "same Wi-Fi only · Ctrl+C stops sharing"

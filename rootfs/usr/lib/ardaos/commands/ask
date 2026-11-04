@@ -14,12 +14,10 @@ source "$ARDAOS_LIB/ai.sh"
 # --- setup / status ------------------------------------------------------------------
 setup() {
   ai_load
-  if has gum; then
-    gum style --border rounded --padding "1 3" --margin "1 0" --border-foreground "$ARDAOS_ACCENT" \
-      "$(gum style --bold "🤖  AI setup")" "" \
-      "Pick a provider, paste its key, done." \
-      "$(gum style --faint "Keys stay on this device ($AI_CONF, only you can read it).")"
-  else ui_title "AI setup"; fi
+  echo
+  ui_box "🤖 AI setup" "Pick a provider, paste its key, done." \
+    "Keys stay on this device, in a file only you can read."
+  echo
   local labels=() p id="" key model pick
   for p in "${PROVIDERS[@]}"; do labels+=("$(cut -d'|' -f2 <<< "$p")"); done
   pick=$(ui_choose "step 1/3 · which AI?" "${labels[@]}") || exit 0
@@ -174,9 +172,7 @@ chat() {
 EOF
   rgb=$(accent_rgb)
   local title; title="💬 ai chat · $(short_label "$AI_PROVIDER") · $(var MODEL "$AI_PROVIDER")"
-  if has gum; then gum style --border rounded --padding "0 2" --margin "1 0" --border-foreground "$ARDAOS_ACCENT" \
-                     "$(gum style --bold "$title")" "$(gum style --faint "/new · /about · /web <q> · /copy · /exit")"
-  else ui_title "$title"; fi
+  echo; ui_box "$title" "/new · /about · /web <q> · /copy · /exit"
   local n; n=$(jq length "$cur")
   ((n)) && ui_info "continuing ($((n / 2)) messages) · /new starts fresh"
 

@@ -47,6 +47,40 @@ ui_title() {
     printf '\n\e[1m== %s ==\e[0m\n\n' "$*"
   fi
 }
+term_cols() {  # real terminal width (scripts don't get $COLUMNS)
+  local c
+  c=$(stty size 2>/dev/null </dev/tty | awk '{print $2}')
+  [[ $c =~ ^[0-9]+$ && $c -gt 0 ]] || c=${COLUMNS:-80}
+  echo "$c"
+}
+
+hex_rgb() {  # hex_rgb "#7aa2f7" → 122;162;247
+  local h=${1#\#}
+  [[ $h =~ ^[0-9a-fA-F]{6}$ ]] || h=7aa2f7
+  printf '%d;%d;%d' "0x${h:0:2}" "0x${h:2:2}" "0x${h:4:2}"
+}
+
+ui_box() {  # ui_box "title" "line"… → rounded box that always fits the screen (phone too)
+  local title=$1; shift
+  local w; w=$(term_cols); ((w > 66)) && w=66; ((w -= 2))
+  if has gum; then
+    gum style --border rounded --padding "0 1" --width "$w" --border-foreground "$ARDAOS_ACCENT" \
+      "$(gum style --bold "$title")" "$@"
+  else
+    printf '\n\e[1m%s\e[0m\n' "$title"; printf '  %s\n' "$@"
+  fi
+}
+
+ui_logo() {  # Şemistan in the accent color, centered as one block (lines keep their shape)
+  local logo cols maxw=0 pad line rgb
+  logo=$(sed 's/\$[0-9]//g' "$ARDAOS_SHARE/logo.txt")
+  while IFS= read -r line; do ((${#line} > maxw)) && maxw=${#line}; done <<< "$logo"
+  cols=$(term_cols); pad=$(((cols - maxw) / 2)); ((pad < 0)) && pad=0
+  rgb=$(hex_rgb "$ARDAOS_ACCENT")
+  echo
+  while IFS= read -r line; do printf '%*s\e[38;2;%sm%s\e[0m\n' "$pad" '' "$rgb" "$line"; done <<< "$logo"
+}
+
 ui_ok()   { printf '  \e[32m✓\e[0m %s\n' "$*"; }
 ui_fail() { printf '  \e[31m✗\e[0m %s\n' "$*"; }
 ui_warn() { printf '  \e[33m!\e[0m %s\n' "$*"; }
