@@ -102,7 +102,7 @@ code
 podman
 podman-compose
 nodejs
-gh                # GitHub CLI: arda ship watches CI, arda server adds runners
+gh
 java-21-openjdk-devel
 %end
 
