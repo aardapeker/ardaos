@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# desc: Claude Code in this folder — on the phone it runs inside a small Ubuntu (arda claude · or just: claude)
+#   First run installs everything (phone: ~1 GB, Wi-Fi recommended). Needs a Claude Pro/Max plan or Console credit.
+#   arda claude          → Claude Code in the current project
+#   arda claude shell    → (phone) a shell inside the Ubuntu layer
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+PROJECTS="$HOME/projects"
+
+# --- laptop: the official installer, then just run it -------------------------------------
+if ! is_termux; then
+  if ! has claude && [[ ! -x $HOME/.local/bin/claude ]]; then
+    ui_box "🤖 Claude Code" "Not installed yet. The official installer puts it in ~/.local/bin and keeps it updated."
+    ui_confirm "Install it now?" || exit 0
+    curl -fsSL https://claude.ai/install.sh | bash
+  fi
+  export PATH="$HOME/.local/bin:$PATH"
+  exec claude "$@"
+fi
+
+# --- phone: Claude Code needs normal Linux (glibc), Termux is Android (bionic) → Ubuntu layer --
+DISTRO=ubuntu
+ROOT="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO"
+CLAUDE_BIN="$ROOT/root/.local/bin/claude"
+
+in_ubuntu() {  # in_ubuntu "commands" [args…] → bash -lc inside Ubuntu, ~/projects shared
+  local script=$1; shift
+  proot-distro login "$DISTRO" --bind "$PROJECTS:/root/projects" -- /bin/bash -lc "$script" _ "$@"
+}
+
+setup() {
+  echo
+  ui_box "🤖 Claude Code on the phone" \
+    "Claude Code needs normal Linux, so it lives in a small Ubuntu inside Termux." \
+    "One-time download, about 1 GB — Wi-Fi recommended." \
+    "You need a Claude Pro or Max plan, or Console API credit."
+  echo
+  ui_confirm "Set it up now?" || exit 0
+  has proot-distro || ui_spin "installing proot-distro" pkg install -y proot-distro
+  if [[ ! -d $ROOT ]]; then
+    ui_info "downloading Ubuntu…"
+    proot-distro install "$DISTRO"
+  fi
+  mkdir -p "$PROJECTS"
+  ui_info "installing git + Claude Code inside Ubuntu…"
+  # shellcheck disable=SC2016  # runs inside Ubuntu, expands there
+  in_ubuntu '
+    set -e
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq curl git ca-certificates ripgrep >/dev/null
+    git config --global --add safe.directory "*"      # files belong to Termux, git would complain
+    curl -fsSL https://claude.ai/install.sh | bash
+    grep -q ".local/bin" ~/.bashrc || echo "export PATH=\$HOME/.local/bin:\$PATH" >> ~/.bashrc
+  '
+  [[ -x $CLAUDE_BIN ]] || { ui_fail "Claude Code didn't install — try again: $ARDAOS_CMD claude"; exit 1; }
+  ui_ok "Claude Code is ready"
+  ui_info "first start asks you to log in: if the link doesn't open, copy it into Chrome"
+}
+
+[[ -x $CLAUDE_BIN ]] || setup
+
+# your git name/email go along, so Claude's commits are yours
+[[ -f $HOME/.gitconfig ]] && cp "$HOME/.gitconfig" "$ROOT/root/.gitconfig.termux" && \
+  in_ubuntu 'git config --global include.path ~/.gitconfig.termux' >/dev/null 2>&1 || true
+
+if [[ ${1:-} == shell ]]; then exec proot-distro login "$DISTRO" --bind "$PROJECTS:/root/projects"; fi
+
+# the same folder, seen from inside Ubuntu
+case $PWD/ in
+  "$PROJECTS"/*) wd="/root/projects${PWD#"$PROJECTS"}" ;;
+  *) ui_warn "Claude Code only sees ~/projects — opening it there (arda new puts projects there)"
+     wd=/root/projects ;;
+esac
+ui_info "pushing: use $ARDAOS_CMD ship here in Termux (it has your GitHub login)"
+# shellcheck disable=SC2016  # $1/$HOME expand inside Ubuntu
+exec proot-distro login "$DISTRO" --bind "$PROJECTS:/root/projects" -- \
+  /bin/bash -lc 'cd "$1" && shift && exec "$HOME/.local/bin/claude" "$@"' _ "$wd" "$@"

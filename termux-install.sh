@@ -23,7 +23,7 @@ pkg upgrade -y -o Dpkg::Options::="--force-confnew"
 say "Installing the terminal stack…"
 for p in fish starship eza bat zoxide fd ripgrep fzf yazi lazygit htop neovim gum \
          fastfetch tealdeer zellij git jq curl unzip xz-utils procps termux-tools \
-         python libqrencode termux-api; do
+         python libqrencode termux-api openssh; do
   printf '\n\e[1m── %s ──\e[0m\n' "$p"   # visible output: big downloads shouldn't look frozen
   pkg install -y -o Dpkg::Options::="--force-confnew" "$p" || warn "couldn't install $p (skipping)"
 done
@@ -44,7 +44,7 @@ echo "$REPO" > "$PREFIX/etc/ardaos/repo"   # so `arda update` knows where to git
 cp "$ROOTFS/etc/fish/conf.d/ardaos.fish" "$PREFIX/etc/fish/conf.d/"
 
 # your personal configs: only added if you don't have them yet
-mkdir -p "$HOME/.config"
+mkdir -p "$HOME/.config" "$HOME/projects"   # projects: arda new puts apps here, Claude Code sees them
 for d in fish nvim btop; do
   cp -rn "$ROOTFS/etc/skel/.config/$d" "$HOME/.config/" 2>/dev/null || true
 done

@@ -1,0 +1,36 @@
+# ArdaOS ship pipeline for an Expo app: every push to main builds an APK
+# and publishes it as the "latest" GitHub Release (download it on the phone, install, done).
+name: ship
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npm test --if-present
+      - run: npx expo prebuild --platform android --no-install
+      - run: ./gradlew assembleRelease --no-daemon
+        working-directory: android
+      - name: Publish the APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          cp "$apk" "__NAME__.apk"
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest "__NAME__.apk" --title "__NAME__ (latest)" \
+            --notes "Built from ${GITHUB_SHA::7}" --target "$GITHUB_SHA"

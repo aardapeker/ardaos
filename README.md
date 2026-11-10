@@ -61,9 +61,14 @@ It's a **live** system: changes are lost when you reboot. That's fine for testin
 | `arda power` | shutdown / reboot / sleep / log out |
 | `arda cams` | find IP cameras & NVRs on your network: brand, RTSP, web, ONVIF (needs the `network` pack) |
 | `arda audit <ip>` | safe, read-only security checkup of one device you own |
+| `arda new web\|api\|expo <name>` | new project with tests + CI: React+TS, Spring Boot or Expo (Android only) |
+| `arda claude` | Claude Code in this project, on the laptop **and the phone** |
+| `arda expo` | Expo app with live reload, opens in Expo Go by itself, no APK builds |
+| `arda ship` | test → commit (AI message) → push → watch CI → "✅ live at name.aardapeker.com" |
+| `arda server` | home prod: Podman + Cloudflare Tunnel + a GitHub runner, Tailscale for the phone |
 | `arda pack` | extra tool packs: `hacker`, `network` (camera field kit), `security`, `dev` (Node, TypeScript, Java 21, Maven, gh) |
 
-Shortcuts: `ai` `go` `web` `music` `files` `lg` `sys` `wifi` `vol` `cheat` `home`
+Shortcuts: `ship` `expo` `claude` `projects` `ai` `go` `web` `music` `files` `lg` `sys` `wifi` `vol` `cheat` `home`
 
 Keys: `Super+Space` launcher · `Super+Esc` home terminal · `Super+Tab` next app ·
 `Super+Q` close · `Super+F` fullscreen · `Super+Shift+E` power menu
@@ -116,6 +121,4 @@ That's normal for a v1. Send the last ~50 lines of `/var/tmp/ardaos-build/lmc.lo
 
 ## Roadmap
 
-- **v2:** install-to-disk, VS Code theme sync, Ghostty shaders
-- **later:** LFS-based engine, same look and commands
-- Chrome: still on trial ⚖️
+See **[ROADMAP.md](ROADMAP.md)**: phone → ship → prod at aardapeker.com, then the home server.

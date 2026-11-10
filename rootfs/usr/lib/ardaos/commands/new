@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# desc: new project, ready for arda ship — arda new web|api|expo <name>
+#   web  → React + TypeScript + Vite, served by nginx in a container
+#   api  → Spring Boot (Java 21), runs in a container
+#   expo → Expo app (TypeScript), every push builds an APK release
+#   Lands in ~/projects/<name> with tests, a Containerfile and a GitHub Actions workflow.
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+TEMPLATES="$ARDAOS_SHARE/new"
+PROJECTS="$HOME/projects"
+kind=${1:-}; name=${2:-}
+
+usage() { sed -n '2,6s/^# *//p' "$0"; exit "${1:-0}"; }
+[[ $kind == -h || $kind == --help || -z $kind ]] && usage
+[[ $kind =~ ^(web|api|expo)$ ]] || { ui_fail "kind must be web, api or expo"; usage 1; }
+[[ -n $name ]] || { ui_fail "give it a name: $ARDAOS_CMD new $kind my-app"; exit 1; }
+[[ $name =~ ^[a-z][a-z0-9-]{1,30}$ ]] || { ui_fail "name: lowercase letters, numbers and - (like radar-web)"; exit 1; }
+dir="$PROJECTS/$name"
+[[ ! -e $dir ]] || { ui_fail "$dir already exists"; exit 1; }
+
+domain_base=${DOMAIN:-example.com}
+domain="$name.$domain_base"
+port=$((3000 + $(cksum <<< "$name" | cut -d' ' -f1) % 1000))        # same name → same port, always
+# Java package from the domain: aardapeker.com + radar-api → com.aardapeker.radarapi
+package=$(awk -F. '{for (i=NF; i>0; i--) printf "%s%s", $i, (i>1 ? "." : "")}' <<< "$domain_base" | tr -cd 'a-z0-9.')
+package="$package.${name//-/}"
+
+need() { local c; for c in "$@"; do has "$c" || { ui_fail "needs $c — $ARDAOS_CMD pack install dev"; exit 1; }; done; }
+
+render() {  # replace the placeholders in the files we copied from the template
+  local f
+  while IFS= read -r -d '' f; do
+    sed -i -e "s|__NAME__|$name|g" -e "s|__DOMAIN__|$domain|g" -e "s|__PACKAGE__|$package|g" "$f"
+  done < <(find "$1" -type f -not -path '*/node_modules/*' -not -path '*/.git/*' -print0)
+}
+
+write_manifest() {  # ardaos.json: what arda server needs to run this project
+  jq -n --arg n "$name" --arg k "$kind" --arg d "$domain" --argjson p "$port" \
+        --argjson i "${1:-0}" --arg h "${2:-/}" \
+    '{name:$n, kind:$k, domain:$d, port:$p} + (if $i > 0 then {containerPort:$i, health:$h} else {} end)' \
+    > "$dir/ardaos.json"
+}
+
+mkdir -p "$PROJECTS"
+ui_title "🧱 new $kind project · $name"
+
+case $kind in
+  web)
+    need node npm
+    cp -r "$TEMPLATES/web" "$dir"
+    render "$dir"
+    write_manifest 80 /
+    ui_spin "installing packages (npm)" bash -c "cd '$dir' && npm install --no-audit --no-fund" \
+      || { ui_fail "npm install failed — run it yourself in $dir"; exit 1; }
+    run_hint="npm run dev   → open localhost:5173 in Chrome" ;;
+
+  api)
+    need java curl unzip
+    tmp=$(mktemp -d)
+    ui_spin "asking start.spring.io for a fresh Spring Boot project" \
+      curl -fsSL https://start.spring.io/starter.zip -o "$tmp/app.zip" \
+        -d type=maven-project -d language=java -d javaVersion=21 \
+        -d groupId="${package%.*}" -d artifactId="$name" -d name="$name" \
+        -d packageName="$package" -d dependencies=web,actuator,validation -d baseDir="$name" \
+      || { ui_fail "couldn't reach start.spring.io"; rm -rf "$tmp"; exit 1; }
+    unzip -q "$tmp/app.zip" -d "$PROJECTS"; rm -rf "$tmp"
+    chmod +x "$dir/mvnw"
+    cp "$TEMPLATES/api/Containerfile" "$TEMPLATES/api/.containerignore" "$dir/"
+    mkdir -p "$dir/.github/workflows"; cp "$TEMPLATES/api/.github/workflows/ship.yml" "$dir/.github/workflows/"
+    src="$dir/src/main/java/${package//.//}"; mkdir -p "$src"
+    cp "$TEMPLATES/api/HelloController.java" "$src/"
+    render "$dir"
+    write_manifest 8080 /actuator/health
+    run_hint="./mvnw spring-boot:run   → http :8080/api/hello" ;;
+
+  expo)
+    need node npm npx
+    ui_spin "creating the Expo app (takes a few minutes)" bash -c \
+      "cd '$PROJECTS' && npx --yes create-expo-app@latest '$name' --template blank-typescript --yes" \
+      || { ui_fail "create-expo-app failed"; exit 1; }
+    [[ -f $dir/app.json ]] || { ui_fail "create-expo-app didn't make $dir"; exit 1; }
+    # principle #2: no Apple code 🍎🚫 — and a package id so the APK builds without questions
+    jq --arg pkg "$package" 'del(.expo.ios) | .expo.android.package = $pkg' "$dir/app.json" > "$dir/app.json.tmp" \
+      && mv "$dir/app.json.tmp" "$dir/app.json"
+    jq 'del(.scripts.ios)' "$dir/package.json" > "$dir/package.json.tmp" && mv "$dir/package.json.tmp" "$dir/package.json"
+    mkdir -p "$dir/.github/workflows"; cp "$TEMPLATES/expo/.github/workflows/ship.yml" "$dir/.github/workflows/"
+    render "$dir/.github"
+    write_manifest
+    run_hint="arda expo   → opens the app in Expo Go on this phone" ;;
+esac
+ui_ok "project ready in ~/projects/$name"
+
+# --- git: first commit on main -------------------------------------------------------------
+cd "$dir"
+[[ -d .git ]] || git init -q
+git checkout -q -B main 2>/dev/null || true
+if [[ -n $(git config user.email || true) ]]; then
+  git add -A && git commit -qm "New $kind project from ArdaOS" && ui_ok "first commit"
+else
+  ui_warn "git doesn't know who you are yet — run once:"
+  ui_info "git config --global user.name \"Your Name\"; git config --global user.email you@example.com"
+fi
+
+# --- GitHub: a private repo, if gh is logged in --------------------------------------------
+if has gh && gh auth status >/dev/null 2>&1 && git rev-parse -q --verify HEAD >/dev/null; then
+  if ui_confirm "Create a private GitHub repo for $name and push?"; then
+    if ui_spin "creating the repo" gh repo create "$name" --private --source . --push; then
+      ui_ok "on GitHub: $(gh repo view --json url -q .url 2>/dev/null)"
+    else ui_warn "couldn't create it — later: gh repo create $name --private --source . --push"; fi
+  fi
+else
+  ui_info "GitHub later: gh auth login, then gh repo create $name --private --source . --push"
+fi
+
+echo
+lines=("cd ~/projects/$name" "$run_hint" "claude → let Claude Code build it" "arda ship → test, push, deploy")
+[[ $kind != expo ]] && lines+=("" "goes live at https://$domain (after arda server add)")
+ui_box "next steps" "${lines[@]}"

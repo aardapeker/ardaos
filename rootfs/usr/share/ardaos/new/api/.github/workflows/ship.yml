@@ -1,0 +1,27 @@
+# ArdaOS ship pipeline: test on GitHub, deploy on your own server.
+# The deploy job runs only after `arda server add <this repo>` (it sets ARDAOS_DEPLOY=true).
+name: ship
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - run: ./mvnw -B -q test
+  deploy:
+    needs: test
+    if: vars.ARDAOS_DEPLOY == 'true'
+    runs-on: [self-hosted, ardaos]
+    steps:
+      - uses: actions/checkout@v5
+      - run: arda server deploy

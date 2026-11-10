@@ -1,0 +1,11 @@
+# build the jar
+FROM docker.io/library/eclipse-temurin:21-jdk AS build
+WORKDIR /src
+COPY . .
+RUN chmod +x mvnw && ./mvnw -B -q -DskipTests package
+
+# run it
+FROM docker.io/library/eclipse-temurin:21-jre
+COPY --from=build /src/target/*.jar /app.jar
+EXPOSE 8080
+CMD ["java", "-jar", "/app.jar"]

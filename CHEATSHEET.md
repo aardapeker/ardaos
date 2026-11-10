@@ -5,6 +5,7 @@ Every ArdaOS command with what it does. Works on the laptop and in the Pocket Ed
 - [Start here](#start-here)
 - [AI helper](#ai-helper)
 - [arda commands](#arda-commands)
+- [Code → prod](#code--prod-the-dream-loop)
 - [Daily shortcuts](#daily-shortcuts)
 - [Silent upgrades](#silent-upgrades)
 - [Tools inside](#tools-inside)
@@ -110,7 +111,56 @@ Every system command lives under `arda`.
 | `arda update` | Phone: git pull + reinstall. Laptop: dnf upgrade + GitHub tools |
 | `arda doctor` | Green or red check for every tool, font and system part |
 | `arda power` | Shutdown, reboot, sleep or log out (laptop) |
+| `arda new web\|api\|expo <name>` | New project in `~/projects`: React+TS, Spring Boot or Expo, with tests and CI (see Code → prod) |
+| `arda claude` | Claude Code in the current project (phone: inside a small Ubuntu, set up on first run) |
+| `arda expo` | Run an Expo app with live reload, opens in Expo Go by itself on the phone |
+| `arda ship ["message"]` | Test → commit → push → watch CI → notify when it's live |
+| `arda server …` | Your home prod: `tunnel`, `add <owner/repo>`, `deploy`, `status`, `logs`, `restart`, `remove`, `tailscale`, `connect` |
 | `arda help` | List all commands |
+
+## Code → prod (the dream loop)
+
+Code on the phone with Claude Code, test it in Chrome or Expo Go, `ship`, and it's live at
+`https://<name>.aardapeker.com`. Until the home server exists, the Fedora laptop plays prod.
+
+**Every day:**
+
+```bash
+arda new web radar-web     # once: project + tests + CI + Containerfile, in ~/projects/radar-web
+cd ~/projects/radar-web
+claude                     # Claude Code writes the code with you
+npm run dev                # open http://localhost:<port> in Chrome (the port is printed)
+ship                       # tests → commit (AI writes the message) → push → CI → "✅ live"
+```
+
+| Kind | What you get | Test it on the phone | Where it ends up |
+| --- | --- | --- | --- |
+| `web` | React 19 + TypeScript + Vite + Vitest, nginx Containerfile | `npm run dev` → Chrome | `https://<name>.aardapeker.com` |
+| `api` | Spring Boot, latest (Java 21, web + actuator + validation), `GET /api/hello` | `./mvnw spring-boot:run` → Chrome `/api/hello` | `https://<name>.aardapeker.com` |
+| `expo` | Expo + TypeScript, Android only (no iOS 🍎🚫) | `arda expo` → opens in Expo Go | APK on the repo's GitHub Releases page (`latest`) |
+
+**One-time server setup** (on the laptop now, on the home server later):
+
+```bash
+arda server tunnel                  # log in to Cloudflare once, aardapeker.com → this machine
+arda server add aardapeker/radar-web  # a GitHub runner here: green CI = deploy here
+arda server tailscale               # optional: reach the server from the phone anywhere
+```
+
+On the phone: `arda server connect arda@<server name>` once, then `arda server status` / `logs <app>` work from the phone too.
+
+**How it fits together:** `ship` pushes → GitHub Actions runs the tests (free, in the cloud) →
+if they pass, the runner on your server runs `arda server deploy` → Podman builds the
+`Containerfile` and swaps the container → the Cloudflare Tunnel serves it at `<name>.aardapeker.com`.
+No router settings, no open ports, works behind CGNAT.
+
+**Good to know**
+
+- Claude Code needs a Claude Pro/Max plan or Console API credit. On the phone the first `arda claude` downloads about 1 GB (Wi-Fi!). Claude Code only sees `~/projects`.
+- Push from Termux with `ship`, not from inside Claude Code: Termux has your GitHub login.
+- Expo: Expo Go covers most apps. If you add custom native code, install `expo-dev-client`, build one APK with `ship`, and `arda expo` switches to it by itself.
+- Without a server, `ship` still runs CI (tests + build) and tells you how to connect one.
+- CI failed? `gh run view <id> --log-failed &| ai explain`
 
 ## Daily shortcuts
 
@@ -123,6 +173,10 @@ Short words for the things you open most.
 | `lg` | lazygit, git in a TUI | both |
 | `sys` | System monitor: btop on the laptop, htop on the phone | both |
 | `cheat <tool>` | Short examples, e.g. `cheat tar` | both |
+| `ship` | `arda ship` | both |
+| `expo` | `arda expo` | both |
+| `projects` | `cd ~/projects` | both |
+| `claude` | Claude Code (the phone goes through `arda claude`) | both |
 | `web` | Firefox | laptop |
 | `music` | spotify_player (needs Spotify Premium) | laptop |
 | `wifi` | Wi-Fi menu (nmtui) | laptop |

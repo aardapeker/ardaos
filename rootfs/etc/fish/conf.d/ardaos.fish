@@ -59,6 +59,13 @@ alias home 'swaymsg workspace 1 >/dev/null'
 alias ai 'arda ask'
 abbr -a -- '?' 'arda ask' 2>/dev/null
 
+# dream loop: arda new → claude → arda expo / npm run dev → arda ship
+alias ship 'arda ship'
+alias expo 'arda expo'
+alias projects 'cd ~/projects'
+# phone: Claude Code lives in an Ubuntu layer, `claude` goes through it (laptop: the real binary)
+set -q TERMUX_VERSION; and alias claude 'arda claude'
+
 # speed test: speedtest-cli on the laptop, speedtest-go on the phone
 for s in speedtest-cli speedtest-go
     if command -q $s; alias speedtest $s; break; end

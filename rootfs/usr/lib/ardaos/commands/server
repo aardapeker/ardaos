@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# desc: your home prod — apps in Podman, live at <name>.DOMAIN through a Cloudflare Tunnel (arda server status)
+#   arda server tunnel             → once: connect this machine to Cloudflare (your domain, no open ports)
+#   arda server add <owner/repo>   → once per app: this machine deploys it on every green `arda ship`
+#   arda server deploy             → build + (re)start the app in this folder (CI runs this for you)
+#   arda server status · logs <app> · restart <app> · remove <app>
+#   arda server tailscale          → private network: reach this machine from the phone anywhere
+#   arda server connect <host>     → (phone) remember the server, then the commands above work from the phone
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+APPS="$HOME/.local/share/ardaos/apps"          # one manifest per deployed app (port, domain)
+RUNNERS="$HOME/.local/share/ardaos/runners"
+UNITS="$HOME/.config/systemd/user"
+CF="$HOME/.cloudflared"
+TUNNEL=ardaos
+BIN="$HOME/.local/bin"
+export PATH="$BIN:$PATH"
+
+# --- phone: the server is somewhere else → run the same command there over SSH -------------
+if is_termux; then
+  if [[ ${1:-} == connect ]]; then
+    [[ -n ${2:-} ]] || { ui_fail "which machine? e.g. $ARDAOS_CMD server connect arda@ardaos  (Tailscale name or IP)"; exit 1; }
+    ui_spin "trying ssh $2" ssh -o ConnectTimeout=8 "$2" true || { ui_fail "can't reach $2 — is Tailscale on, on both?"; exit 1; }
+    state_set SERVER "$2"; ui_ok "connected — try: $ARDAOS_CMD server status"; exit 0
+  fi
+  srv=$(state_get SERVER)
+  [[ -n $srv ]] || { ui_fail "no server yet — on it run '$ARDAOS_CMD server tailscale', then here: $ARDAOS_CMD server connect arda@<name>"; exit 1; }
+  exec ssh -t "$srv" arda server "$@"
+fi
+
+need_gh() { has gh && gh auth status >/dev/null 2>&1 || { ui_fail "log in to GitHub first: gh auth login"; exit 1; }; }
+manifest() { jq -r ".$1 // empty" "${2:-ardaos.json}"; }
+
+reload_unit() {  # reload_unit name "ExecStart" [WorkingDirectory]
+  mkdir -p "$UNITS"
+  cat > "$UNITS/$1.service" <<EOF
+[Unit]
+Description=ArdaOS $1
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=$2
+${3:+WorkingDirectory=$3}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$1.service" >/dev/null 2>&1
+  systemctl --user restart "$1.service"
+}
+
+linger() {  # user services keep running after logout and start at boot
+  loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q yes || sudo loginctl enable-linger "$USER"
+}
+
+# --- the Cloudflare Tunnel: <name>.DOMAIN → this machine, no port forwarding (works behind CGNAT) ---
+write_ingress() {
+  [[ -f $CF/$TUNNEL.json ]] || return 0
+  {
+    echo "tunnel: $TUNNEL"
+    echo "credentials-file: $CF/$TUNNEL.json"
+    echo "ingress:"
+    local m
+    for m in "$APPS"/*.json; do
+      [[ -f $m ]] || continue
+      printf '  - hostname: %s\n    service: http://127.0.0.1:%s\n' "$(manifest domain "$m")" "$(manifest port "$m")"
+    done
+    echo "  - service: http_status:404"
+  } > "$CF/config.yml"
+  reload_unit ardaos-tunnel "$BIN/cloudflared tunnel --no-autoupdate --config $CF/config.yml run $TUNNEL"
+}
+
+tunnel() {
+  [[ -n ${DOMAIN:-} ]] || { ui_fail "set DOMAIN in /etc/ardaos/identity.conf first"; exit 1; }
+  echo
+  ui_box "🌍 Cloudflare Tunnel" \
+    "Your apps get https://<name>.$DOMAIN — no router settings, no open ports." \
+    "Needs: $DOMAIN added to a free Cloudflare account (its nameservers point to Cloudflare)."
+  echo
+  ui_confirm "Set it up?" || exit 0
+  if ! has cloudflared; then
+    local arch; arch=$(uname -m); [[ $arch == x86_64 ]] && arch=amd64 || arch=arm64
+    mkdir -p "$BIN"
+    ui_spin "downloading cloudflared" curl -fsSL -o "$BIN/cloudflared" \
+      "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$arch"
+    chmod +x "$BIN/cloudflared"
+  fi
+  if [[ ! -f $CF/cert.pem ]]; then
+    ui_info "a browser link opens — log in to Cloudflare and pick $DOMAIN"
+    cloudflared tunnel login
+  fi
+  if [[ ! -f $CF/$TUNNEL.json ]]; then
+    cloudflared tunnel delete -f "$TUNNEL" >/dev/null 2>&1 || true     # a leftover with lost credentials
+    cloudflared tunnel create --credentials-file "$CF/$TUNNEL.json" "$TUNNEL"
+  fi
+  linger
+  write_ingress
+  local m; for m in "$APPS"/*.json; do [[ -f $m ]] && route_dns "$(manifest domain "$m")"; done
+  ui_ok "tunnel is up — deployed apps answer at https://<name>.$DOMAIN"
+}
+
+route_dns() { [[ -f $CF/$TUNNEL.json ]] && cloudflared tunnel route dns --overwrite-dns "$TUNNEL" "$1" >/dev/null 2>&1 || true; }
+
+# --- deploy: build the Containerfile, swap the container, check it answers ------------------
+deploy() {
+  [[ -f ardaos.json ]] || { ui_fail "no ardaos.json here — run this inside an app made by $ARDAOS_CMD new"; exit 1; }
+  [[ -f Containerfile ]] || { ui_fail "no Containerfile — this kind of app isn't served (expo apps ship as an APK)"; exit 1; }
+  has podman || { ui_fail "podman is missing: sudo dnf install podman"; exit 1; }
+  local name port cport health domain c
+  name=$(manifest name); port=$(manifest port); cport=$(manifest containerPort); domain=$(manifest domain)
+  health=$(manifest health); c="ardaos-$name"
+  ui_title "📦 deploy · $name"
+  ui_spin "building the image" podman build -q -t "localhost/ardaos/$name" -f Containerfile . \
+    || { podman build -t "localhost/ardaos/$name" -f Containerfile .; exit 1; }   # failed: show why
+  podman rm -f "$c" >/dev/null 2>&1 || true
+  podman run -d --name "$c" --label "ardaos.app=$name" --restart=always \
+    -p "127.0.0.1:$port:${cport:-80}" "localhost/ardaos/$name" >/dev/null
+  local ok=0
+  for _ in $(seq 90); do curl -fs -o /dev/null "http://127.0.0.1:$port${health:-/}" && { ok=1; break; }; sleep 1; done
+  if ((ok == 0)); then
+    ui_fail "the app didn't answer on :$port${health:-/} — last logs:"
+    podman logs --tail 30 "$c"; exit 1
+  fi
+  mkdir -p "$APPS"; cp ardaos.json "$APPS/$name.json"
+  systemctl --user enable podman-restart.service >/dev/null 2>&1 || true   # containers come back after a reboot
+  if [[ -f $CF/$TUNNEL.json ]]; then
+    write_ingress; route_dns "$domain"
+    ui_ok "live → https://$domain"
+  else
+    ui_ok "running → http://127.0.0.1:$port   (public URL: $ARDAOS_CMD server tunnel)"
+  fi
+  podman image prune -f >/dev/null 2>&1 || true
+}
+
+# --- add: a GitHub runner on this machine, so a green CI deploys here -----------------------
+add() {
+  local repo=${1:-}
+  [[ $repo == */* ]] || { ui_fail "which repo? e.g. $ARDAOS_CMD server add aardapeker/radar-web"; exit 1; }
+  need_gh
+  gh repo view "$repo" >/dev/null 2>&1 || { ui_fail "can't see $repo on GitHub"; exit 1; }
+  local slug=${repo//\//-} dir arch ver token
+  dir="$RUNNERS/$slug"
+  if [[ ! -x $dir/run.sh ]]; then
+    arch=$(uname -m); [[ $arch == x86_64 ]] && arch=x64 || arch=arm64
+    ver=$(gh api repos/actions/runner/releases/latest -q .tag_name); ver=${ver#v}
+    mkdir -p "$dir"
+    ui_spin "downloading the GitHub runner $ver" bash -c \
+      "curl -fsSL 'https://github.com/actions/runner/releases/download/v$ver/actions-runner-linux-$arch-$ver.tar.gz' | tar xz -C '$dir'"
+  fi
+  token=$(gh api -X POST "repos/$repo/actions/runners/registration-token" -q .token)
+  ( cd "$dir" && ./config.sh --unattended --replace --url "https://github.com/$repo" --token "$token" \
+      --name "$(hostname)-ardaos" --labels ardaos >/dev/null )
+  linger
+  reload_unit "ardaos-runner-$slug" "$dir/run.sh" "$dir"
+  gh variable set ARDAOS_DEPLOY --body true --repo "$repo"
+  ui_ok "$repo deploys here now — every green $ARDAOS_CMD ship goes live"
+  [[ -f $CF/$TUNNEL.json ]] || ui_info "for the public URL, once: $ARDAOS_CMD server tunnel"
+}
+
+status() {
+  ui_title "🏠 server · $(hostname)"
+  local m name c state
+  shopt -s nullglob; local ms=("$APPS"/*.json)
+  ((${#ms[@]})) || { ui_info "no apps yet — in a project: $ARDAOS_CMD server add <owner/repo>, then ship"; }
+  for m in "${ms[@]}"; do
+    name=$(manifest name "$m"); c="ardaos-$name"
+    state=$(podman inspect -f '{{.State.Status}}' "$c" 2>/dev/null || echo missing)
+    [[ $state == running ]] && ui_ok "$(printf '%-16s https://%s' "$name" "$(manifest domain "$m")")" \
+                            || ui_fail "$(printf '%-16s %s' "$name" "$state")"
+  done
+  echo
+  systemctl --user is-active -q ardaos-tunnel 2>/dev/null && ui_ok "tunnel up" || ui_info "tunnel: off ($ARDAOS_CMD server tunnel)"
+  local r; for r in "$UNITS"/ardaos-runner-*.service; do
+    r=$(basename "$r" .service)
+    systemctl --user is-active -q "$r" && ui_ok "runner ${r#ardaos-runner-}" || ui_fail "runner ${r#ardaos-runner-} stopped"
+  done
+}
+
+app_arg() { [[ -n ${1:-} && -f $APPS/$1.json ]] || { ui_fail "which app? $(cd "$APPS" 2>/dev/null && ls -- *.json 2>/dev/null | sed 's/\.json$//' | tr '\n' ' ')"; exit 1; }; }
+
+remove() {
+  app_arg "${1:-}"
+  ui_confirm "Stop $1 and take it offline?" || exit 0
+  podman rm -f "ardaos-$1" >/dev/null 2>&1 || true
+  rm -f "$APPS/$1.json"; write_ingress
+  ui_ok "$1 is offline (the GitHub repo is untouched)"
+}
+
+tailscale_setup() {
+  ui_box "🔒 Tailscale" "A private network between your phone and this machine — works on any Wi-Fi or mobile data." \
+    "Install the Tailscale app on the phone too and log in with the same account."
+  ui_confirm "Set it up?" || exit 0
+  has tailscale || curl -fsSL https://tailscale.com/install.sh | sh
+  sudo systemctl enable --now tailscaled
+  sudo tailscale up --ssh                 # --ssh: the phone can ssh in with no keys to manage
+  ui_ok "done — on the phone: $ARDAOS_CMD server connect $USER@$(hostname)"
+}
+
+case ${1:-status} in
+  deploy)    deploy ;;
+  add)       add "${2:-}" ;;
+  tunnel)    tunnel ;;
+  status)    status ;;
+  logs)      app_arg "${2:-}"; exec podman logs -f --tail 100 "ardaos-$2" ;;
+  restart)   app_arg "${2:-}"; podman restart "ardaos-$2" >/dev/null && ui_ok "restarted $2" ;;
+  remove)    remove "${2:-}" ;;
+  tailscale) tailscale_setup ;;
+  connect)   ui_info "connect is for the phone — this machine IS the server" ;;
+  -h|--help) sed -n '2,9s/^# *//p' "$0" ;;
+  *)         ui_fail "unknown: $1 — $ARDAOS_CMD server --help"; exit 1 ;;
+esac

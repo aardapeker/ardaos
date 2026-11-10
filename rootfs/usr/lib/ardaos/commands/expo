@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# desc: run your Expo app with live reload — on the phone it opens in Expo Go by itself (arda expo · --dev-client)
+#   Edit, save, the app reloads. No APK needed.
+#   --go          Expo Go (default)
+#   --dev-client  your own development build (needed when the app uses custom native code)
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+
+PORT=8081
+[[ -f app.json || -f app.config.js || -f app.config.ts ]] || { ui_fail "not an Expo project — cd into one (or: $ARDAOS_CMD new expo <name>)"; exit 1; }
+has npx || { ui_fail "needs Node — $ARDAOS_CMD pack install dev"; exit 1; }
+
+mode=go
+grep -q '"expo-dev-client"' package.json 2>/dev/null && mode=dev-client
+case ${1:-} in --go) mode=go ;; --dev-client) mode=dev-client ;; -h|--help) sed -n '2,6s/^# *//p' "$0"; exit 0 ;; esac
+
+[[ -d node_modules ]] || ui_spin "installing packages (first time)" npm install --no-audit --no-fund
+
+if ! is_termux; then
+  ui_info "scan the QR code with the phone (same Wi-Fi) — r reloads, Ctrl+C stops"
+  exec npx expo start "--$mode"
+fi
+
+# phone: Metro and the app on the same device → localhost, then open the app via an Android link
+slug=$(jq -r '.expo.slug // .expo.name // empty' app.json 2>/dev/null || true)
+if [[ $mode == go ]]; then
+  url="exp://127.0.0.1:$PORT"
+  ui_info "needs Expo Go from the Play Store"
+else
+  url="exp+$slug://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A$PORT"
+  ui_info "needs your development build installed (one APK, built once)"
+fi
+(
+  for _ in $(seq 180); do                      # wait for Metro, then open the app once
+    if curl -fs "http://127.0.0.1:$PORT/status" 2>/dev/null | grep -q running; then
+      termux-open-url "$url" 2>/dev/null || am start -a android.intent.action.VIEW -d "$url" >/dev/null 2>&1 || true
+      exit 0
+    fi
+    sleep 1
+  done
+) &
+ui_info "the app opens by itself when Metro is ready · r reloads · Ctrl+C stops"
+ui_info "didn't open? $([[ $mode == go ]] && echo "Expo Go → Enter URL manually" || echo "open in Chrome") → $url"
+exec npx expo start "--$mode" --localhost --port "$PORT"

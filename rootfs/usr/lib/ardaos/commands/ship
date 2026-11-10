@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# desc: test → commit → push → watch CI → tell you when it's live (arda ship "message" · or just: ship)
+#   arda ship                 → AI writes the commit message from your changes (or you type one)
+#   arda ship "fix the cat"   → your message
+#   --no-test                 → skip the local tests (CI still runs them)
+set -euo pipefail
+source "${ARDAOS_LIB:-/usr/lib/ardaos}/lib.sh"
+# shellcheck source=../ai.sh
+source "$ARDAOS_LIB/ai.sh"
+
+run_tests=1 msg=""
+for a in "$@"; do
+  case $a in
+    --no-test) run_tests=0 ;;
+    -h|--help) sed -n '2,5s/^# *//p' "$0"; exit 0 ;;
+    *) msg+="${msg:+ }$a" ;;
+  esac
+done
+
+top=$(git rev-parse --show-toplevel 2>/dev/null) || { ui_fail "not a git project — cd into one (or: $ARDAOS_CMD new)"; exit 1; }
+cd "$top"
+name=$(basename "$top")
+[[ -f ardaos.json ]] && name=$(jq -r '.name // empty' ardaos.json 2>/dev/null || echo "$name")
+ui_title "🚀 ship · $name"
+
+# --- 1. local tests: a broken build never leaves the phone ------------------------------
+if ((run_tests)); then
+  if [[ -f package.json ]] && jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+    [[ -d node_modules ]] || ui_spin "installing packages" npm install --no-audit --no-fund
+    ui_spin "running tests" npm test --silent || { ui_fail "tests failed — see: npm test  (or ship anyway: --no-test)"; exit 1; }
+    ui_ok "tests pass"
+  elif [[ -x mvnw ]]; then
+    ui_spin "running tests (Maven, first time is slow)" ./mvnw -B -q test || { ui_fail "tests failed — see: ./mvnw test"; exit 1; }
+    ui_ok "tests pass"
+  else
+    ui_info "no tests found, skipping"
+  fi
+fi
+
+# --- 2. commit ---------------------------------------------------------------------------
+git add -A
+if ! git diff --cached --quiet; then
+  [[ -n $(git config user.email) ]] || { ui_fail "git doesn't know who you are: git config --global user.email you@example.com"; exit 1; }
+  ui_info "$(git diff --cached --shortstat | sed 's/^ //')"
+  if [[ -z $msg ]]; then
+    ai_load
+    if [[ -n ${AI_PROVIDER:-} ]]; then
+      diff=$(git diff --cached --stat; echo; git diff --cached -U2 | head -c 10000)
+      msg=$(spin "AI is writing the commit message" ai_send "$AI_PROVIDER" \
+        "You write git commit messages. Reply with ONLY the message: one line, imperative, under 60 characters, no quotes, no prefix like feat:." \
+        "$(one_msg "$diff")" text 2>/dev/null | head -1 | tr -d '"`' || true)
+      [[ $msg == error:* ]] && msg=""
+    fi
+    msg=$(input "what changed?" "$msg" "" "commit message (Enter = keep)" "✏️  ")
+    [[ -n $msg ]] || { git reset -q; ui_info "nothing shipped"; exit 0; }
+  fi
+  git commit -q -m "$msg"
+  ui_ok "committed: $msg"
+elif [[ -z $(git log --branches --not --remotes -1 --format=%h 2>/dev/null) ]] && git remote get-url origin >/dev/null 2>&1; then
+  ui_info "nothing new to ship — re-watching the last run"
+fi
+
+# --- 3. push -----------------------------------------------------------------------------
+if ! git remote get-url origin >/dev/null 2>&1; then
+  if ! has gh || ! gh auth status >/dev/null 2>&1; then ui_fail "no GitHub repo yet — log in first: gh auth login"; exit 1; fi
+  ui_confirm "No GitHub repo yet. Create a private one called $name?" || exit 0
+  ui_spin "creating the repo + pushing" gh repo create "$name" --private --source . --push
+else
+  ui_spin "pushing" git push -q -u origin HEAD || { ui_fail "push failed — try: git pull --rebase, then ship again"; exit 1; }
+fi
+ui_ok "pushed"
+
+# --- 4. watch CI -------------------------------------------------------------------------
+if [[ ! -d .github/workflows ]] || ! has gh; then
+  ui_info "no CI to watch — done"; exit 0
+fi
+sha=$(git rev-parse HEAD) run=""
+for _ in $(seq 20); do          # GitHub needs a few seconds to start the run
+  run=$(gh run list --commit "$sha" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+  [[ -n $run ]] && break
+  sleep 3
+done
+[[ -n $run ]] || { ui_warn "CI didn't start (yet) — check: gh run list"; exit 0; }
+ui_info "CI is running — you can close this, the phone will tell you"
+echo
+if gh run watch "$run" --exit-status --interval 5 --compact 2>/dev/null || gh run watch "$run" --exit-status; then
+  ok=1
+else
+  ok=0
+fi
+echo
+
+# --- 5. the result -----------------------------------------------------------------------
+kind=$(jq -r '.kind // empty' ardaos.json 2>/dev/null || true)
+domain=$(jq -r '.domain // empty' ardaos.json 2>/dev/null || true)
+if ((ok == 0)); then
+  ui_fail "CI failed — the logs: gh run view $run --log-failed"
+  ui_info "or let AI read them: gh run view $run --log-failed &| ai explain"
+  ui_notify "❌ $name" "CI failed"
+  exit 1
+fi
+case $kind in
+  web|api)
+    if [[ $(gh variable get ARDAOS_DEPLOY 2>/dev/null) == true ]]; then
+      ui_ok "live → https://$domain"
+      ui_notify "✅ $name is live" "https://$domain"
+    else
+      ui_ok "CI passed (tests + build)"
+      ui_info "not deployed yet — connect a server: $ARDAOS_CMD server add $(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "<owner/repo>")"
+      ui_notify "✅ $name" "CI passed"
+    fi ;;
+  expo)
+    url=$(gh release view latest --json url -q .url 2>/dev/null || true)
+    ui_ok "APK built${url:+ → $url}"
+    ui_info "on the phone: open that link, download the .apk, install"
+    ui_notify "✅ $name APK ready" "${url:-gh release view latest}" ;;
+  *)
+    ui_ok "CI passed"
+    ui_notify "✅ $name" "CI passed" ;;
+esac
